@@ -1,8 +1,9 @@
 MWLite_gke
 ==========
 
+CAUTION: This is NOT an official release of MultiWii. 
 
-MWLite-gke is a radically cutdown version of MultiWii 2.2.
+MWLite-gke is a radically cutdown version of MultiWii 2.2. 
 
 There are many many changes and in fact it is close to a rewrite. Code loop can run down to 1.3mS which is more than enough and is mainly I2C time reading the MPU6050. I have it set to around 2mS currently.
 
