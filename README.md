@@ -14,11 +14,9 @@ The defines at the top of config.h (GENERAL_USE) should work. Comment out or unc
 
 The original MW control code is selected by default and supports all the flip behaviour as per the original. There are a number of my control options as well. WOLFERL is angle mode only and should be OK for just flying.
 
-Code is plug and play so if you don't have various sensors it works it out.
-
 When you connect the battery their will be a longer delay than for the original code so you have more time to connect the battery and to get it down and still. Wait until you see a single Blue flash then three flashes.
 
-You may connect other I2C sensors using SCK/YAW pin for SCL MISO/Pitch pin for SDA. Devices include the BMP085 and MS5611 barometers and the HMC65883L magnetomter. 
+You may connect other I2C sensors using SCK/YAW pin for SCL MISO/Pitch pin for SDA. Devices include the BMP085 and MS5611 barometers and the HMC65883L magnetometer. Code is plug and play so if you don't have various sensors MWLite works it out.
 
 If you connect the throttle pin to ground before you power up you can bind the Spektrum receiver in the usual way. The PUMQ board will stay in bind mode until the link is removed and the power is reconnected.
 
