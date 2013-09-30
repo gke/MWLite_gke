@@ -20,7 +20,7 @@ When you connect the battery their will be a longer delay than for the original 
 
 You may connect other I2C sensors using SCK/YAW pin for SCL MISO/Pitch pin for SDA. Devices include the BMP085 and MS5611 barometers and the HMC65883L magnetomter. 
 
-If you connect the throttle pin to ground when you power up the FC controller will allow you to bind the Spektrum receiver in the usual way.
+If you connect the throttle pin to ground before you power up you can bind the Spektrum receiver in the usual way. The PUMQ board will stay in bind mode until the link is removed and the power is reconnected.
 
 This is a work in progress. I would appreciate any positive comments/suggestions on the PUMQ Thread.
 
