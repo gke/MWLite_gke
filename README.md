@@ -18,13 +18,11 @@ Code is plug and play so if you don't have various sensors it works it out.
 
 When you connect the battery their will be a longer delay than for the original code so you have more time to connect the battery and to get it down and still. Wait until you see a single Blue flash then three flashes.
 
-This is a work in progress.
-
 You may connect other I2C sensors using SCK/YAW pin for SCL MISO/Pitch pin for SDA. Devices include the BMP085 and MS5611 barometers and the HMC65883L magnetomter. 
 
 If you connect the throttle pin to ground when you power up the FC controller will allow you to bind the Spektrum receiver in the usual way.
 
-I would appreciate any positive comments/suggestions on the PUMQ Thread .
+This is a work in progress. I would appreciate any positive comments/suggestions on the PUMQ Thread.
 
 http://www.rcgroups.com/forums/showthread.php?t=1885026
 
