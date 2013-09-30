@@ -25,5 +25,5 @@ This is a work in progress. I would appreciate any positive comments/suggestions
 
 http://www.rcgroups.com/forums/showthread.php?t=1885026
 
-Greg
+G.K. Egan May 2013.
 
