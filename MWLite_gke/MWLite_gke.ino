@@ -217,6 +217,7 @@ void setup() {
   ADCSRA &= ~_BV(ADPS0); // http://www.arduino.cc/cgi-bin/yabb2/YaBB.pl?num=1208715493/11
 
   zeroIntegrals();
+  angle[ROLL] = angle[PITCH] = angle[YAW] = 0;
   relativeAltitude = ROC = 0;
   previousCycleuS = micros();
 

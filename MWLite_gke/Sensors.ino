@@ -34,7 +34,6 @@
 enum MPU6050LPFs {
   MPU6050_LPF_256HZ, MPU6050_LPF_188HZ, MPU6050_LPF_98HZ, MPU6050_LPF_42HZ, MPU6050_LPF_20HZ, MPU6050_LPF_10HZ, MPU6050_LPF_5HZ};
 
-
 #define MPU6050_ADDRESS (0x68<<1) // address pin AD0 low (GND), default for FreeIMU v0.4 and InvenSense evaluation board
 
 #if !defined(MPU6050_DLPF_CFG)
@@ -745,26 +744,51 @@ boolean updateMagnetometer(void) {
 
 // Battery 
 
-#define VBAT_UPDATE_MS 25
-#define VBAT_BUCKET_TRIG (2000/VBAT_UPDATE_MS)
-#define LVC_DECAY (VBAT_UPDATE_MS/5)
-#define LVC_FAST_DECAY (VBAT_UPDATE_MS/2)
+#if !defined(LVC_LIMIT)
+#define LVC_LIMIT 0
+#endif
+
+#if !defined(LVC_WARNING_PERCENT)
+#define LVC_WARNING_PERCENT 80 // scales down desired throttle "suddenly" to this percentage when low volts reached
+#endif
+
+#if !defined(LVC_DELAY_TIME_S)
+#define LVC_DELAY_TIME_S 3
+#endif
+
+#if !defined(LVC_LANDING_TIME_S)
+#define LVC_LANDING_TIME_S 3
+#endif
+
+#define LVC_TRIGGER_TIME_S 2
+
+#define LVC_UPDATE_MS 25
+#define LVC_BUCKET_TRIG ((LVC_TRIGGER_TIME_S*1000)/LVC_UPDATE_MS)
+
+#define LVC_TEMP ((1024L*LVC_UPDATE_MS)/(LVC_LANDING_TIME_S*1000L))
+#if (LVC_TEMP>0)
+#define LVC_DECAY_STEP LVC_TEMP
+#else
+#define LVC_DECAY_STEP 1
+#endif
 
 void checkBattery(void) { // 28-32uS addition due to Goebish, bucket suggestion vlad_vy
-#if defined(LOW_VOLTAGE_LIMIT)
+#if (LVC_LIMIT > 0)
   enum lvcStates {
-    Monitor, Warning, Wait, Land                                      };
-  static uint8_t lvcState = Monitor;
+    Start = 0, Monitor, Warning, Wait, Land
+  };
   uint32_t NowmS;
-  static uint32_t vbatUpdatemS = millis();
+
+  static uint8_t lvcState = Monitor;
+  static uint32_t lvcUpdatemS = millis();
   static uint32_t lvcTimeoutmS = millis();
-  static int8_t bucket = VBAT_BUCKET_TRIG;
-  static uint32_t v = 0;
+  static int8_t bucket = LVC_BUCKET_TRIG;
+  static uint32_t v = (200<<2); // set high for startup
   static uint16_t newv;
 
   NowmS = millis();
-  if (NowmS > vbatUpdatemS ) {
-    vbatUpdatemS = NowmS + VBAT_UPDATE_MS;
+  if (NowmS > lvcUpdatemS ) {
+    lvcUpdatemS = NowmS + LVC_UPDATE_MS;
 
     newv = (((int32_t)analogRead(VBAT_PIN) * 200L * (VOLTS_RTOP+VOLTS_RBOT))/VOLTS_RBOT + 512) >> 10; 
 
@@ -772,15 +796,15 @@ void checkBattery(void) { // 28-32uS addition due to Goebish, bucket suggestion 
     analog.vbat = v >> 2;
 
 #if defined(USE_MINIMAL_LVC)
-    if ((analog.vbat > LOW_VOLTAGE_LIMIT) && !f.ALARM) {
-      if (bucket < VBAT_BUCKET_TRIG) 
+    if ((analog.vbat > LVC_LIMIT) && !f.ALARM) {
+      if (bucket < LVC_BUCKET_TRIG) 
         bucket += 2;
     }
     else      
       if (bucket <= 0) {
       f.ALARM = true;
-      if (throttleLVCScale >= LVC_FAST_DECAY)  
-        throttleLVCScale -= LVC_FAST_DECAY;
+      if (throttleLVCScale >= LVC_DECAY_STEP)  
+        throttleLVCScale -= LVC_DECAY_STEP;
       else 
         doDisarm(); 
     } 
@@ -789,41 +813,42 @@ void checkBattery(void) { // 28-32uS addition due to Goebish, bucket suggestion 
     switch (lvcState) {
     case Monitor:
       f.ALARM = false;
-      if (analog.vbat <= LOW_VOLTAGE_LIMIT )
+      if (analog.vbat <= LVC_LIMIT )
         lvcState = Warning;
       else
-        if (bucket < VBAT_BUCKET_TRIG) 
+        if (bucket < LVC_BUCKET_TRIG) 
           bucket += 2;
       break;
     case Warning:
       f.ALARM = true;
-      if (analog.vbat > LOW_VOLTAGE_LIMIT ) {
+      if (analog.vbat > LVC_LIMIT ) {
         throttleLVCScale = 1024;
         lvcState = Monitor;   
       } 
       else
         if (bucket <= 0) {
-          throttleLVCScale = ((LOW_VOLTAGE_WARNING_PERCENT * 1024L)/100);
-          lvcTimeoutmS = NowmS + (LOW_VOLTAGE_TIMEOUT_S * 1000);  
+          throttleLVCScale = ((LVC_WARNING_PERCENT * 1024L)/100);
+          lvcTimeoutmS = NowmS + (LVC_DELAY_TIME_S * 1000);  
           lvcState = Wait;
         }
         else
           bucket--;
       break;
     case Wait:
-      debug[3] = lvcTimeoutmS;
       if (NowmS > lvcTimeoutmS)
         lvcState = Land;    
       break;
     case Land:
-      if (throttleLVCScale >= LVC_DECAY)  
-        throttleLVCScale -= LVC_DECAY;
+      if (throttleLVCScale >= LVC_DECAY_STEP)  
+        throttleLVCScale -= LVC_DECAY_STEP;
       else 
         doDisarm();  
       break;
     } // switch 
 #endif 
   }
+#else
+  throttleLVCScale = 1024;
 #endif
 } // checkBattery
 //______________________________________________________________________________________________
@@ -846,6 +871,8 @@ void initSensors(void) {
   hmc5883Init();
 #endif
 } // initSensors
+
+
 
 
 

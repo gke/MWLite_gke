@@ -29,7 +29,7 @@
  no servos and 8KHz PWM for brushed DC motors.
  
  */
- 
+
 // Macros
 
 #define Limit1(i,l) (((i) < -(l)) ? -(l) : (((i) > (l)) ? (l) : (i)))
@@ -241,7 +241,7 @@ enum box {
 #if defined(USE_TUNING)
   BOX_TUNE,
   BOX_ALT_TUNE,
- // BOX_RELAY,
+  BOX_RELAY,
 #endif
   CHECKBOX_ITEMS
 };
@@ -270,7 +270,8 @@ uint8_t TUNE_MODE :
   1;
 uint8_t ALT_TUNE_MODE :
   1;
-//uint8_t RELAY_MODE : 1;
+uint8_t RELAY_MODE : 
+  1;
 uint8_t BARO_ACTIVE :
   1 ; 
 uint8_t SMALL_ANGLE_25DEG :
@@ -324,7 +325,7 @@ const char boxnames[] PROGMEM = // names for dynamic generation of config GUI
 #if defined(USE_TUNING)
 "TUNE;"
 "A.TUNE;"
-//"RELAY;"
+"RELAY;"
 #endif
 ;
 
@@ -352,20 +353,12 @@ const uint8_t boxids[] PROGMEM = {
 #if defined(USE_TUNING)
   1 << BOX_TUNE,
   1 << BOX_ALT_TUNE,
-//  1 << BOX_RELAY,
+  1 << BOX_RELAY,
 #endif
 };
 
 
 // Errors
-
-#if !defined(LOW_VOLTAGE_WARNING)
-#define LOW_VOLTAGE_WARNING_PERCENT 80 // scales down desired throttle "suddenly" to this percentage when low volts reached
-#endif
-
-#if !defined(LOW_VOLTAGE_TIMEOUT_S)
-#define LOW_VOLTAGE_TIMEOUT_S 3
-#endif
 
 #if !defined(I2CMPU) | !defined(I2CBARO)
 #define I2CMPU 0
@@ -391,6 +384,7 @@ const uint8_t boxids[] PROGMEM = {
 #if ((defined(USE_QUICK_TUNE) + defined(USE_QUICK_ALT_TUNE) +  defined(USE_RELAY_TUNE))>1)
 #error "Only one tuning scheme permitted at a time (USE_QUICK_TUNE or USE_QUICK_ALT_TUNE)" // or USE_RELAY_TUNE)"
 #endif
+
 
 
 

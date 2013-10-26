@@ -73,9 +73,10 @@
 
 // Battery
 
-//#define LOW_VOLTAGE_LIMIT 32 // 0.1V
-#define LOW_VOLTAGE_WARNING_PERCENT 90 // scales down desired throttle "suddenly" to this percentage when low volts reached
-#define LOW_VOLTAGE_TIMEOUT_S 3 // autoland after this delay in seconds
+//#define LVC_LIMIT 32 // 0.1V
+#define LVC_DELAY_TIME_S 2 // autoland after this delay in seconds
+#define LVC_WARNING_PERCENT 90 // scales down desired throttle "suddenly" to this percentage when low volts reached
+#define LVC_LANDING_TIME_S 3 // time for throttle to drop to zero
 //#define USE_MINIMAL_LVC // reduces code size
 
 // Altitude
@@ -114,10 +115,11 @@
 
 #else
 
-#define MW_ECKS
+#define MW_WLTOYS
+//#define MW_ECKS
 
 //#define USE_QUICK_TUNE // based on Brad Quick's tuning scheme - change PID tuning limits at the bottom of this file.
-#define USE_QUICK_ALT_TUNE // tuning for altitude control - change PID tuning limits at the bottom of this file.
+//#define USE_QUICK_ALT_TUNE // tuning for altitude control - change PID tuning limits at the bottom of this file.
 //DO NOT USE #define USE_RELAY_TUNE
 #define TUNE_BOTH_AXES // if uncommented alternates between pitch and roll otherwise just pitch
 
@@ -144,7 +146,7 @@
 
 //#define DEBUG_RC // debug1 = glitch count, debug2 = frame width, debug3 = failsafe
 //#define DEBUG_RELAY // debug1 = RollKu*100, debug2 = Rollw*10 ...
-#define DEBUG_ATTITUDE // debug1 = roll, debug2 = pitch, debug3 = yaw, debug4 = accOK
+//#define DEBUG_ATTITUDE // debug1 = roll, debug2 = pitch, debug3 = yaw, debug4 = accOK
 //#define DEBUG_BARO // debug1 = temp*100, debug1 = press*10, debug3 = groundalt, debug4 = alt
 //#define DEBUG_ALT_HOLD // debug1 = rate of climb, debug2 = desired alt, debug3 = BaroPID, debug4 = throttle
 //#define DEBUG_HEAD_HOLD // debug1 = heading, debug2 = desired heading, debug3 = error, debug4 = yaw command 
@@ -167,9 +169,10 @@
 
 // Battery
 
-#define LOW_VOLTAGE_LIMIT 32 // 0.1V
-#define LOW_VOLTAGE_WARNING_PERCENT 90 // scales down desired throttle "suddenly" to this percentage when low volts reached
-#define LOW_VOLTAGE_TIMEOUT_S 3 // autoland after this delay in seconds
+#define LVC_LIMIT 33 // 0.1V
+#define LVC_DELAY_TIME_S 2 // autoland after this delay in seconds
+#define LVC_WARNING_PERCENT 90 // scales down desired throttle "suddenly" to this percentage when low volts reached
+#define LVC_LANDING_TIME_S 10 // time for throttle to drop to zero
 //#define USE_MINIMAL_LVC // reduces code size
 
 // Altitude
@@ -224,14 +227,15 @@
 
 // Battery
 
-#define LOW_VOLTAGE_LIMIT 30 // 0.1V
-#define LOW_VOLTAGE_WARNING_PERCENT 90 // scales down desired throttle "suddenly" to this percentage when low volts reached
-#define LOW_VOLTAGE_TIMEOUT_S 3 // autoland after this delay in seconds
+//#define LVC_LIMIT 32 // 0.1V
+#define LVC_DELAY_TIME_S 2 // autoland after this delay in seconds
+#define LVC_WARNING_PERCENT 90 // scales down desired throttle "suddenly" to this percentage when low volts reached
+#define LVC_LANDING_TIME_S 5 // time for throttle to drop to zero
 //#define USE_MINIMAL_LVC // reduces code size
 
 // Altitude
 
-#define USE_BOSCH_BARO  
+//#define USE_BOSCH_BARO  
 //#define USE_MS_BARO
 //#define USE_MS5611_EXTENDED_TEMP  // optional if flying below 20C
 #define USE_MW_ALT_CONTROL // original MW altitude hold scheme
@@ -271,7 +275,11 @@
 #define USE_GYRO_AVERAGE // remove some jitter by averaging last two readings
 #define USE_HEADROOM
 
-#define YAW_DIRECTION 1 // sets the sense of the yaw control - use your Tx servo reversing if possible
+#if defined(MW_WLTOYS)
+#define YAW_DIRECTION -1
+#else
+#define YAW_DIRECTION 1 // sets the sense of the yaw control
+#endif
 
 //____________________________________________________________________________________________
 

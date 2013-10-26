@@ -116,7 +116,7 @@ void computeControl(void) {
   checkQuickTune();
 
   // Roll/Pitch
-  for (axis = ROLL; axis < YAW; axis++)  
+  for (axis = ROLL; axis < YAW; axis++)
     if (f.RELAY_MODE && tuningAxis[axis])
       axisPID[axis] = tuneStimulus[tuneaxis];
     else { 

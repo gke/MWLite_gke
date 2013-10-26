@@ -61,7 +61,6 @@ void doArm(void) {
   f.ARMED = f.ACC_CALIBRATED && !f.ALARM;
 
   if ( f.ARMED ) {
-    throttleLVCScale = 1024;
     velZ = 0.0f;
     if (f.MAG_ACTIVE && f.MAG_CALIBRATED && f.HEAD_HOLD_MODE) 
       holdHeading = angle[YAW];
