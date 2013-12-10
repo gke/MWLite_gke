@@ -29,10 +29,11 @@
  no servos and 8KHz PWM for brushed DC motors.
  
  */
- 
+
 // Heading
 
 void doHeadFree(void) {
+#if defined(ISMULTICOPTER)
   float relHeading, cosA, sinA;
   int16_t Temp;
 
@@ -49,15 +50,16 @@ void doHeadFree(void) {
     rcCommand[ROLL] =  rcCommand[ROLL] * cosA - rcCommand[PITCH] * sinA; 
     rcCommand[PITCH] = Temp;
   }
+#endif
 } // doHeadFree
 
 void doMagHold(void) {
 #if defined(USE_MAG)
   int16_t HE;
 
-  if (f.ANGLE_MODE && rcOptions[BOX_MAG] && f.MAG_ACTIVE && f.MAG_CALIBRATED && f.SMALL_ANGLE_25DEG && (abs(rcCommand[YAW]) < 70)) {
+  if (f.ANGLE_MODE && rcOptions[BOX_HEAD_HOLD] && f.MAG_ACTIVE && f.MAG_CALIBRATED && f.SMALL_ANGLE_25DEG && (abs(rcCommand[YAW]) < 70)) {
 
-    f.MAG_MODE = true;
+    f.HEAD_HOLD_MODE = true;
 
     HE = angle[YAW] - holdHeading;
     if (HE > 180) 
@@ -69,7 +71,7 @@ void doMagHold(void) {
     rcCommand[YAW] -= (HE * conf.P8[PIDMAG]) >> 5;
   }
   else {
-    f.MAG_MODE = false;
+    f.HEAD_HOLD_MODE = false;
     HE = 0; 
     holdHeading = angle[YAW];
   }
@@ -83,29 +85,5 @@ void doMagHold(void) {
 
 #endif // USE_MAG
 } // doMagHold
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 

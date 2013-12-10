@@ -29,7 +29,7 @@
  no servos and 8KHz PWM for brushed DC motors.
  
  */
- 
+
 // CONFIGURABLE PARAMETERS
 
 #define GENERAL_USE // default settings that should work for most quads
@@ -44,15 +44,11 @@
 //#define SERIAL_SUM_PPM  PITCH,YAW,THROTTLE,ROLL,AUX1,AUX2,AUX3,AUX4,8,9,10,11 //For Graupner/Spektrum
 //#define SPEKTRUM_RTF_SCALING // rescales and reverses yaw and roll for Blade RTF MLP4DSM game style Tx
 
-#define USE_MW_CONTROL // original MW control scheme
-//#define USE_MW_BASEFLIGHT_CONTROL // baseflight version of MW control scheme
-//#define WOLFERL // angle mode only - use default parameters Brad's tuning scheme tested with this
+//#define USE_MW_LEGACY_CONTROL // MultiWii 2.2 and earlier
+#define USE_MW_2_3_CONTROL // MultiWii 2.3 refined legacy scheme
+//#define USE_MW_ALEXK_CONTROL // Similar to baseflight?
+//#define V20131112 // P/PD GKE
 
-//#define USE_QUICK_TUNE // based on Brad Quick's tuning scheme - change PID tuning limits at the bottom of this file.
-//#define USE_QUICK_ALT_TUNE // tuning for altitude control - change PID tuning limits at the bottom of this file.
-#define TUNE_BOTH_AXES // if uncommented alternates between pith and roll otherwise just pitch
-
-#define ACROTRAINER_THRESHOLD 200 // inactive if commented out or > 500
 #define DEADBAND 25 
 #define ACC_TRIM_STEP_SIZE 16 // controls acc trim using stick calibration - increase if you are impatient 
 
@@ -67,9 +63,9 @@
 //#define GYR_CMPF_FACTOR 4000 // better for crusing and less jitters
 
 //#define MOTOR_STOP // comment out for slow motor run after arming
-#define MINCOMMAND  1000
-#define MINTHROTTLE 1050
-#define MAXTHROTTLE 1850
+#define MIN_COMMAND  1000
+#define MIN_THROTTLE 1050
+#define MAX_THROTTLE 1850
 
 // Battery
 
@@ -96,7 +92,7 @@
 //#define USE_BOSCH_MAG
 #define MAG_DECLINATION (0) // use declination for your location
 
-// Choose the option which gives almost no compass heading change when you tilt the quad about 20deg in any direction
+// Choose the option which gives almost no compass heading change when you tilt the quad about 20deg in any DIR
 // Package top upwards
 //#define MAG_ORIENTATION(X, Y, Z)  {magADC[ROLL]  =  X; magADC[PITCH]  =  Y; magADC[YAW]  = -Z;}
 //#define MAG_ORIENTATION(X, Y, Z)  {magADC[ROLL]  =  Y; magADC[PITCH]  =  -X; magADC[YAW]  = -Z;}
@@ -115,115 +111,98 @@
 
 #else
 
-#define MW_WLTOYS
-//#define MW_ECKS
+#define ECKS
+//#define PUMQ
+//#define WLTOYS
+//#define FLYING_WING
+//#define AIRPLANE
+//#define VTAIL // MultiGUI does not support V-Tails
 
-//#define USE_QUICK_TUNE // based on Brad Quick's tuning scheme - change PID tuning limits at the bottom of this file.
-//#define USE_QUICK_ALT_TUNE // tuning for altitude control - change PID tuning limits at the bottom of this file.
-//DO NOT USE #define USE_RELAY_TUNE
+//#define USE_RELAY_TUNE
 #define TUNE_BOTH_AXES // if uncommented alternates between pitch and roll otherwise just pitch
-
-//#define WOLFERL
-//#define V20130614b
-//#define GKE_EXP
-
-#define USE_MW_CONTROL // original MW control scheme
-//#define USE_MW_BASEFLIGHT_CONTROL // baseflight version of MW control scheme
-//#define USE_MW_EXPANDED_CONTROL // original MW control scheme "flattened" to make code understandable
 
 #define ALLOW_ARM_DISARM_VIA_TX_YAW
 //#define ALLOW_ARM_DISARM_VIA_TX_ROLL
 
-#define ACROTRAINER_THRESHOLD 200 // inactive if not defined or > 500
-#define DEADBAND 25 // uSec  
+#define DEADBAND 25 // uSec 
+#define STICK_NEUTRAL_DEADBAND 50
 
-#define USE_THROTTLE_CURVE // MW GUI throttle curve active
+#if defined(ISMULTICOPTER)
+#define MPU6050_DLPF_CFG MPU6050_LPF_188HZ
+#else
+#define MPU6050_DLPF_CFG MPU6050_LPF_42HZ
+#endif
 
 #define ALT_HOLD_LIMIT_M 20 // 120 // metres
 #define ALT_HOLD_STEP 8
 
 #define MAG_DECLINATION (-12) // use declination for your location
 
+#define GYR_CMPF_FACTOR 1000 // faster angle estimate recovery after aerobatics but more jitters
+//#define GYR_CMPF_FACTOR 4000 // better for crusing and less jitters
+
+#define MIN_COMMAND  1000
+
 //#define DEBUG_RC // debug1 = glitch count, debug2 = frame width, debug3 = failsafe
 //#define DEBUG_RELAY // debug1 = RollKu*100, debug2 = Rollw*10 ...
 //#define DEBUG_ATTITUDE // debug1 = roll, debug2 = pitch, debug3 = yaw, debug4 = accOK
-//#define DEBUG_BARO // debug1 = temp*100, debug1 = press*10, debug3 = groundalt, debug4 = alt
+#define DEBUG_BARO // debug1 = temp*100, debug1 = press*10, debug3 = groundalt, debug4 = alt
 //#define DEBUG_ALT_HOLD // debug1 = rate of climb, debug2 = desired alt, debug3 = BaroPID, debug4 = throttle
-//#define DEBUG_HEAD_HOLD // debug1 = heading, debug2 = desired heading, debug3 = error, debug4 = yaw command 
+//#define DEBUG_HEAD_HOLD // debug1 = heading, debug2 = desired heading, debug3 = error, debug4 = yaw command
+//#define DEBUG_TRIMS // debug2 = aileron, debug3 = elevator, debug4 = rudder trims
+
+#define USE_GKE_DM9_SPEKTRUM_SCALING // dodgy DM9 does not appear to capture pulse widths correctly?
 
 //________________________
 
-#ifdef MW_ECKS
+#if defined(ECKS)
 
-#define NANOWII
-//#define MPU6050_DLPF_CFG MPU6050_LPF_42HZ
-//#define MPU6050_DLPF_CFG MPU6050_LPF_98HZ
-#define MPU6050_DLPF_CFG MPU6050_LPF_188HZ
-//#define GYR_CMPF_FACTOR 1000 // faster angle estimate recovery after aerobatics but more jitters
-#define GYR_CMPF_FACTOR 4000 // better for crusing and less jitters
+//#define WOLFERL
+#define V20131112 // P/PD
 
-#define MINCOMMAND  1000
-#define MINTHROTTLE 1064 // special ESC (simonk)
-#define MAXTHROTTLE 1850
+//#define USE_THROTTLE_CURVE // MW GUI throttle curve active
+
+#define QUADX
+#define PWM_OUTPUTS     4
+#define Multiwii_32U4_SE
+
+#define MIN_THROTTLE 1065 // special ESC (simonk)
+#define MAX_THROTTLE 1850
+
 #define SERIAL_SUM_PPM  PITCH,YAW,THROTTLE,ROLL,AUX1,AUX2,AUX3,AUX4,8,9,10,11 //For Graupner/Spektrum
 
 // Battery
 
-#define LVC_LIMIT 33 // 0.1V
+//#define LVC_LIMIT 33 // 0.1V
 #define LVC_DELAY_TIME_S 2 // autoland after this delay in seconds
 #define LVC_WARNING_PERCENT 90 // scales down desired throttle "suddenly" to this percentage when low volts reached
 #define LVC_LANDING_TIME_S 10 // time for throttle to drop to zero
 //#define USE_MINIMAL_LVC // reduces code size
 
-// Altitude
-
-//#define USE_BOSCH_BARO  
-//#define USE_MS_BARO
-//#define USE_MS5611_EXTENDED_TEMP  // optional if flying below 20C
-#define USE_MW_ALT_CONTROL // original MW altitude hold scheme
-//#define USE_SONAR
-
-#define USE_PROP_ALT_HOLD // rate of climb is proportional to throttle 
-
-// Magnetometer
-
-//#define USE_BOSCH_MAG
-
-// Choose the option which gives almost no compass heading change when you tilt the quad about 20deg in any direction
-// Package top upwards
-//#define MAG_ORIENTATION(X, Y, Z)  {magADC[ROLL]  =  X; magADC[PITCH]  =  Y; magADC[YAW]  = -Z;}
-//#define MAG_ORIENTATION(X, Y, Z)  {magADC[ROLL]  =  Y; magADC[PITCH]  =  -X; magADC[YAW]  = -Z;}
-//#define MAG_ORIENTATION(X, Y, Z)  {magADC[ROLL]  =  -X; magADC[PITCH]  =  -Y; magADC[YAW]  = -Z;}
-//#define MAG_ORIENTATION(X, Y, Z)  {magADC[ROLL]  =  -Y; magADC[PITCH]  =  X; magADC[YAW]  = -Z;}
-
-// Package top downwards
-//#define MAG_ORIENTATION(X, Y, Z)  {magADC[ROLL]  =  Y; magADC[PITCH]  =  X; magADC[YAW]  = Z;}
-//#define MAG_ORIENTATION(X, Y, Z)  {magADC[ROLL]  =  X; magADC[PITCH]  =  -Y; magADC[YAW]  = Z;} // GY86 upside down SW I2C
-//#define MAG_ORIENTATION(X, Y, Z)  {magADC[ROLL]  =  -Y; magADC[PITCH]  =  -X; magADC[YAW]  = Z;}
-//#define MAG_ORIENTATION(X, Y, Z)  {magADC[ROLL]  =  -X; magADC[PITCH]  =  Y; magADC[YAW]  = Z;}
+#define USE_MS_BARO
+#define USE_BOSCH_MAG
 
 //________________________
 
-#else // POCKET QUAD
+#elif defined(PUMQ) || defined(WLTOYS)
+
+//#define WOLFERL
+#define V20131112 // P/PD
+
+#define ANGLE_MODE_THRESHOLD 50 // forces angle mode on this axis if sticks below this deflection [0:500] 
+
+#define USE_THROTTLE_CURVE // MW GUI throttle curve active
+
+#define QUADX
+#define PWM_OUTPUTS     4
+#define HK_PocketQuad
+
+#define MIN_THROTTLE 1065 
+#define MAX_THROTTLE 1850
 
 #define SPEKTRUM 1024
-//#define SERIAL_SUM_PPM  PITCH,YAW,THROTTLE,ROLL,AUX1,AUX2,AUX3,AUX4,8,9,10,11 //For Graupner/Spektrum
-//#define STANDARD_RX
-//#define FLYSKY // not commissioned yet
-
 #define USE_GKE_DM9_SPEKTRUM_SCALING // dodgy DM9 does not appear to capture pulse widths correctly?
 //#define SPEKTRUM_RTF_SCALING // rescales and reverses yaw and roll for Blade RTF MLP4DSM game style Tx
-
-#define HK_PocketQuad
-//#define MPU6050_DLPF_CFG MPU6050_LPF_42HZ 
-//#define MPU6050_DLPF_CFG MPU6050_LPF_98HZ
-#define MPU6050_DLPF_CFG MPU6050_LPF_188HZ
-//#define GYR_CMPF_FACTOR 1000 // faster angle estimate recovery after aerobatics but more jitters
-#define GYR_CMPF_FACTOR 4000 // better for crusing and less jitters
-
-#define MINCOMMAND  1000
-#define MINTHROTTLE 1050
-#define MAXTHROTTLE 1850
 
 // Battery
 
@@ -233,34 +212,113 @@
 #define LVC_LANDING_TIME_S 5 // time for throttle to drop to zero
 //#define USE_MINIMAL_LVC // reduces code size
 
-// Altitude
+//________________________
 
-//#define USE_BOSCH_BARO  
-//#define USE_MS_BARO
-//#define USE_MS5611_EXTENDED_TEMP  // optional if flying below 20C
-#define USE_MW_ALT_CONTROL // original MW altitude hold scheme
-//#define USE_SONAR
+#elif defined(FLYING_WING)
 
-#define USE_PROP_ALT_HOLD // rate of climb is proportional to throttle 
+//#define PLANKS
+#define Z84
+//#define FX
 
-// Magnetometer
+#define V20131112 // P/PD
 
-//#define USE_BOSCH_MAG
+//#define USE_TX_TUNING // WARNING - RESCALES P GAINS - debug1 = roll gain scaling * 250, debug2 = pitch ...
 
-// Choose the option which gives almost no compass heading change when you tilt the quad about 20deg in any direction
-// Package top upwards
-//#define MAG_ORIENTATION(X, Y, Z)  {magADC[ROLL]  =  X; magADC[PITCH]  =  Y; magADC[YAW]  = -Z;}
-//#define MAG_ORIENTATION(X, Y, Z)  {magADC[ROLL]  =  Y; magADC[PITCH]  =  -X; magADC[YAW]  = -Z;}
-//#define MAG_ORIENTATION(X, Y, Z)  {magADC[ROLL]  =  -X; magADC[PITCH]  =  -Y; magADC[YAW]  = -Z;}
-//#define MAG_ORIENTATION(X, Y, Z)  {magADC[ROLL]  =  -Y; magADC[PITCH]  =  X; magADC[YAW]  = -Z;}
+#define PWM_OUTPUTS     3
 
-// Package top downwards
-//#define MAG_ORIENTATION(X, Y, Z)  {magADC[ROLL]  =  Y; magADC[PITCH]  =  X; magADC[YAW]  = Z;}
-#define MAG_ORIENTATION(X, Y, Z)  {magADC[ROLL]  =  X; magADC[PITCH]  =  -Y; magADC[YAW]  = Z;} // GY86 upside down SW I2C
-//#define MAG_ORIENTATION(X, Y, Z)  {magADC[ROLL]  =  -Y; magADC[PITCH]  =  -X; magADC[YAW]  = Z;}
-//#define MAG_ORIENTATION(X, Y, Z)  {magADC[ROLL]  =  -X; magADC[PITCH]  =  Y; magADC[YAW]  = Z;}
+#if defined(PLANKS)
 
-#endif // MW_ECKS
+#define SERVO_LIMITS {{-100,100},{-70,70},{-70,70}}
+#define SERVO_DIR {1, 1, -1}
+#define AILERON_DIFF  0 // should be very small to correct any mechanical differential ONLY
+
+#elif defined(Z84)
+
+#define SERVO_MECH_TRIMS {0, 0, 100}
+#define SERVO_LIMITS {{-100,100},{-70,70},{-70,70}}
+#define SERVO_DIR {1, -1, 1}
+#define AILERON_DIFF  0 // should be very small to correct any mechanical differential ONLY
+
+#elif defined(FX81)
+
+#define SERVO_MECH_TRIMS {0, 0, 100}
+#define SERVO_LIMITS {{-100,100},{-70,70},{-70,70}}
+#define SERVO_DIR {1, -1, 1}
+#define AILERON_DIFF  0 // should be very small to correct any mechanical differential ONLY
+
+#else
+
+#endif
+
+#define NANOWII
+
+#define MIN_THROTTLE PWM_MIN
+#define MAX_THROTTLE PWM_MAX
+
+#define SERIAL_SUM_PPM  PITCH,YAW,THROTTLE,ROLL,AUX1,AUX2,AUX3,AUX4,8,9,10,11 //For Graupner/Spektrum
+
+//________________________
+
+#elif defined(AIRPLANE)
+
+//#define PUSHYCAT
+#define SPITFIRE_HK
+//#define LANCASTER
+
+#define USE_TX_TUNING // WARNING - RESCALES P GAINS - debug1 = roll gain scaling * 250, debug2 = pitch ...
+
+#define V20131112 // P/PD
+
+#define PWM_OUTPUTS     5
+
+#if defined(PUSHYCAT)
+
+#define SERVO_LIMITS {{-100,100},{-70,70},{-70,70},{-50,50},{-60,60}}
+#define SERVO_DIR {1, 1, -1, 1, -1}
+#define AILERON_DIFF  40
+
+#elif defined(SPITFIRE_HK)
+
+#define SERVO_MECH_TRIMS {0, 0, 0, 0, -87}
+#define SERVO_LIMITS {{-100,100},{-70,70},{-70,70},{-50,50},{-60,60}}
+#define SERVO_DIR {1, 1, -1, -1, 1}
+#define AILERON_DIFF  40
+
+#elif defined(LANCASTER)
+
+#define SERVO_LIMITS {{-100,100},{-70,70},{-70,70},{-50,50},{-60,60}}
+#define SERVO_DIR {1, 1, -1, 1, -1}
+#define AILERON_DIFF  40
+
+#endif
+
+#define NANOWII
+
+#define MIN_THROTTLE PWM_MIN
+#define MAX_THROTTLE PWM_MAX
+
+#define SERIAL_SUM_PPM  PITCH,YAW,THROTTLE,ROLL,AUX1,AUX2,AUX3,AUX4,8,9,10,11 //For Graupner/Spektrum
+
+//________________________
+
+#elif defined(VTAIL)
+
+#define V20131112 // P/PD
+
+#define PWM_OUTPUTS     5
+
+#define SERVO_LIMITS {{-100,100},{-70,70},{-70,70},{-60,60},{-60,60}}
+#define SERVO_DIR {1, 1, -1, 1, -1}
+#define AILERON_DIFF  40
+
+#define NANOWII
+
+#define MIN_THROTTLE PWM_MIN
+#define MAX_THROTTLE PWM_MAX
+
+#define SERIAL_SUM_PPM  PITCH,YAW,THROTTLE,ROLL,AUX1,AUX2,AUX3,AUX4,8,9,10,11 //For Graupner/Spektrum
+
+#endif // GKE configs
 
 #endif // GENERAL_USE
 
@@ -275,13 +333,41 @@
 #define USE_GYRO_AVERAGE // remove some jitter by averaging last two readings
 #define USE_HEADROOM
 
-#if defined(MW_WLTOYS)
-#define YAW_DIRECTION -1
+#if defined(WLTOYS)
+#define YAW_DIR -1
 #else
-#define YAW_DIRECTION 1 // sets the sense of the yaw control
+#define YAW_DIR 1 // sets the sense of the yaw control
 #endif
 
 //____________________________________________________________________________________________
+
+
+// Altitude
+
+//#define USE_BOSCH_BARO  
+//#define USE_MS_BARO
+//#define USE_MS5611_EXTENDED_TEMP  // optional if flying below 20C
+//#define USE_MW_ALT_CONTROL // original MW altitude hold scheme
+//#define USE_SONAR
+
+#define USE_PROP_ALT_HOLD // rate of climb is proportional to throttle 
+
+// Magnetometer
+
+//#define USE_BOSCH_MAG
+
+// Choose the option which gives almost no compass heading change when you tilt the quad about 20deg in any DIR
+// Package top upwards
+//#define MAG_ORIENTATION(X, Y, Z)  {magADC[ROLL]  =  X; magADC[PITCH]  =  Y; magADC[YAW]  = -Z;}
+//#define MAG_ORIENTATION(X, Y, Z)  {magADC[ROLL]  =  Y; magADC[PITCH]  =  -X; magADC[YAW]  = -Z;}
+//#define MAG_ORIENTATION(X, Y, Z)  {magADC[ROLL]  =  -X; magADC[PITCH]  =  -Y; magADC[YAW]  = -Z;}
+//#define MAG_ORIENTATION(X, Y, Z)  {magADC[ROLL]  =  -Y; magADC[PITCH]  =  X; magADC[YAW]  = -Z;}
+
+// Package top downwards
+//#define MAG_ORIENTATION(X, Y, Z)  {magADC[ROLL]  =  Y; magADC[PITCH]  =  X; magADC[YAW]  = Z;}
+//#define MAG_ORIENTATION(X, Y, Z)  {magADC[ROLL]  =  X; magADC[PITCH]  =  -Y; magADC[YAW]  = Z;} // GY86 upside down SW I2C
+//#define MAG_ORIENTATION(X, Y, Z)  {magADC[ROLL]  =  -Y; magADC[PITCH]  =  -X; magADC[YAW]  = Z;}
+//#define MAG_ORIENTATION(X, Y, Z)  {magADC[ROLL]  =  -X; magADC[PITCH]  =  Y; magADC[YAW]  = Z;}
 
 // Throttle
 
@@ -307,13 +393,6 @@
 #define SERIAL2_COM_SPEED 115200
 #define SERIAL3_COM_SPEED 115200
 
-// Train Acro with auto recovery. Value set the point where ANGLE_MODE takes over.
-// Remember to activate ANGLE_MODE first!...
-// A Value on 200 will give a very distinct transfer */
-#if !defined(ACROTRAINER_THRESHOLD)
-#define ACROTRAINER_THRESHOLD 1000
-#endif
-
 // Failsafes
 
 // Failsafe check pulses on four main control channels CH1-CH4. If the pulse is missing or below 985us (on any of these 
@@ -323,9 +402,14 @@
 // after FAILSAFE_OFF_DELAY the copter is disarmed, and motors is stopped. If RC pulse coming back before reached 
 // FAILSAFE_OFF_DELAY time, after the small quard time the RC control is returned to normal. 
 
+
 #define FAILSAFE_DELAY     10 // Guard time for failsafe activation after signal lost. 1 step = 0.1sec - 1sec in example
 #define FAILSAFE_OFF_DELAY (FAILSAFE_DELAY*5) // Time for Landing before motors stop in 0.1sec. 
-#define FAILSAFE_THROTTLE  (MINTHROTTLE + 200) // (*) Throttle level used for landing - may be relative to MINTHROTTLE 
+#if defined(ISMULTICOPTER)
+#define FAILSAFE_THROTTLE  (MIN_THROTTLE + 200) // (*) Throttle level used for landing - may be relative to MINTHROTTLE 
+#else
+#define FAILSAFE_THROTTLE MIN_COMMAND
+#endif
 
 // Tx
 
@@ -335,46 +419,32 @@
 #define DEADBAND 0
 #endif
 
+#if !defined(STICK_NEUTRAL_DEADBAND)
+#define ANGLE_MODE_THRESHOLD 50
+#endif
+
 #define MIDRC 1500
 
 // Software I2C - SCL is pin SCK/YAW, SDA is pin MISO/Pitch CAUTION VCC pin is 5V which will destroy some sensor boards 
 
 #define I2C_SW 1  // software I2C bus
 
-#if !defined(STANDARD_RX)
-  #define USE_5V_ON_MOSI  // external sensors use MOSI pin as 3V supply - CAUTION 10mA @5V/5mA @3.3V
-  #define I2CBARO 1
-  #define I2CMAG 1
-  #define I2CMPU 0
+#if defined(STANDARD_RX)
+//#define USE_5V_ON_MOSI  // external sensors use MOSI pin as 3V supply - CAUTION 10mA @5V/5mA @3.3V
+#define I2CBARO 1
+#define I2CMAG 1
+#define I2CMPU 0
+#else
+//#define USE_5V_ON_MOSI  // external sensors use MOSI pin as 3V supply - CAUTION 10mA @5V/5mA @3.3V
+#define I2CBARO 0
+#define I2CMAG 0
+#define I2CMPU 0
 #endif 
-
-// Autotune
-
-// Choose sensible limits - tuning is constrained to being with these values
-// The limits MUST be positive and greater than 1
-
-// Pitch/Roll
-#define MIN_P 20
-#define MAX_P 60
-
-#define MIN_I 1
-#define MAX_I 50
-
-#define MIN_D 2
-#define MAX_D 40
-
-// Altitude
-#define MIN_ALT_P 55
-#define MAX_ALT_P 75
-
-#define MIN_ALT_I 15
-#define MAX_ALT_I 35
-
-#define MIN_ALT_D 2
-#define MAX_ALT_D 30
 
 #if (defined(USE_BOSCH_MAG) || defined(USE_MS_BARO) || defined(USE_BOSCH_BARO))
 #define CYCLETIME 3000 
 #else
-#define CYCLETIME 2048 // no point in going faster :)
+#define CYCLETIME 2048 // PID calculations scaled for this - no point in going faster :)
 #endif
+
+

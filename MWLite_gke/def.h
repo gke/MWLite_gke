@@ -25,8 +25,8 @@
  addition of MW modes.
  
  Lite supports only Atmel 32u4 processors using an MPU6050 and optionally 
- BMP085 and MS5611 barometers and HMC5883 magnetometer with 4 motors, 
- no servos and 8KHz PWM for brushed DC motors.
+ BMP085 and MS5611 barometers and HMC5883 magnetometer with 4 motors at 
+ 8KHz PWM for brushed DC motors and up to 5 serovs for airplanes or flying wings.
  
  */
 
@@ -36,21 +36,22 @@
 #define Sign(n) ((n<0) ? -1 : 1)
 #define PercentToStick(n) (n*5)
 
-// Motors
+#define PWM_MIN 1020 //  [1020;2000]
+#define PWM_MAX 2000 //  [1020;2000]
 
-#define NUMBER_MOTOR     4
+#define MAX_BANK_ANGLE 500 // 0.1 Degrees - don't change
 
 #ifdef MOTOR_STOP
-#define EFF_MINCOMMAND MINCOMMAND
+#define EFF_MIN_COMMAND MIN_COMMAND
 #else
-#define EFF_MINCOMMAND conf.minthrottle
+#define EFF_MIN_COMMAND conf.minthrottle
 #endif
 
-#if (defined(USE_MW_CONTROL) || defined(USE_MW_BASEFLIGHT_CONTROL) || defined(USE_MW_EXPANDED_CONTROL))
+#if (defined(USE_MW_ALEXK_CONTROL) || defined(USE_MW_LEGACY_CONTROL) || defined(USE_MW_2_3_CONTROL) )
 #define USE_MW
 #endif
 
-#if defined(USE_QUICK_TUNE) || defined(USE_QUICK_ALT_TUNE) || defined(USE_RELAY_TUNE)
+#if defined(USE_RELAY_TUNE)
 #define USE_TUNING
 #endif
 
@@ -108,10 +109,11 @@
 // Board Orientations and Sensor definitions
 
 #if defined(NANOWII)
-#define QUADX
 #define MPU6050
 #define ACC_ORIENTATION(X, Y, Z)  {accADC[ROLL]  = -Y; accADC[PITCH]  =  X; accADC[YAW]  =  Z;}
 #define GYRO_ORIENTATION(X, Y, Z) {gyroADC[ROLL] = -X; gyroADC[PITCH] = -Y; gyroADC[YAW] = -Z;}
+#define MAG_ORIENTATION(X, Y, Z)  {magADC[ROLL]  =  Y; magADC[PITCH]  =  -X; magADC[YAW]  = -Z;}
+
 #undef INTERNAL_I2C_PULLUPS
 
 #define LED_BLUE_PINMODE             DDRD |= (1<<4)           //D4 to output
@@ -127,13 +129,37 @@
 
 #endif
 
+
+#if defined(Multiwii_32U4_SE)
+#define MPU6050
+#define ACC_ORIENTATION(X, Y, Z)  {accADC[ROLL]  = -X; accADC[PITCH]  = -Y; accADC[YAW]  =  Z;}
+#define GYRO_ORIENTATION(X, Y, Z) {gyroADC[ROLL] =  Y; gyroADC[PITCH] = -X; gyroADC[YAW] = -Z;}
+  #define MAG_ORIENTATION(X, Y, Z)  {magADC[ROLL]  =  X; magADC[PITCH]  =  Y; magADC[YAW]  = -Z;}
+
+#undef INTERNAL_I2C_PULLUPS
+
+#define LED_BLUE_PINMODE             DDRD |= (1<<4)           //D4 to output
+#define LED_BLUE_TOGGLE              PIND |= (1<<5)|(1<<4)     //switch LEDPIN state (Port D5) & pin D4
+#define LED_BLUE_OFF                 PORTD |= (1<<5); PORTD &= ~(1<<4)
+#define LED_BLUE_ON                  PORTD &= ~(1<<5); PORTD |= (1<<4)
+
+#define VBAT_PIN A3
+#define VOLTS_RTOP 58  // 56 Ratios as per HK NanoWii manual for 3S pack
+#define VOLTS_RBOT 33  
+
+#define SONAR_PIN A1 // ??????
+
+#endif  
+
 #if defined(HK_PocketQuad)
-#define QUADX
 #define DC_MOTORS
-#define CESCO_OFFSET // motor PWM phase offset to smooth battery load
+#define CESCO_OFFSET
+#define QUADX
+#define PWM_OUTPUTS  4
 #define MPU6050
 #define ACC_ORIENTATION(X, Y, Z)  {accADC[ROLL]  = -X; accADC[PITCH]  =  -Y; accADC[YAW]  =  Z;}
 #define GYRO_ORIENTATION(X, Y, Z) {gyroADC[ROLL] = Y; gyroADC[PITCH] = -X; gyroADC[YAW] = -Z;}
+//#define MAG_ORIENTATION(X, Y, Z)  {magADC[ROLL]  =  X; magADC[PITCH]  =  Y; magADC[YAW]  = -Z;}
 #undef INTERNAL_I2C_PULLUPS
 
 #define VBAT_PIN A8
@@ -150,7 +176,20 @@
 #define MULTITYPE 2
 #elif defined(QUADX)
 #define MULTITYPE 3
+#elif defined(FLYING_WING)
+#define MULTITYPE 8
+#elif defined(AIRPLANE)
+#define MULTITYPE 14
+#elif defined(VTAIL)
+#define MULTITYPE 17
 #endif
+
+enum AirplaneControl {
+  RightAileron = 1, LeftAileron, Rudder, Elevator};
+enum VTailControl {
+  RightRudder = 3, LeftRudder};
+enum WingControl {
+  RightElevon = 1, LeftElevon};
 
 // Some unsorted "chain" defines 
 
@@ -186,16 +225,17 @@
 #define RC_CHANS 8
 #endif // SBUS
 
-#if !defined(ACROTRAINER_MODE)
-#define ACROTRAINER_MODE 1000
-#endif
-
 #if !defined(ACC_TRIM_STEP_SIZE)
 #define ACC_TRIM_STEP_SIZE 8
 #endif
 
 #if !defined(ALT_HOLD_THROTTLE_NEUTRAL_ZONE)
 #define ALT_HOLD_THROTTLE_NEUTRAL_ZONE 40
+#endif
+
+
+#if defined(QUADP) || defined(QUADX)
+#define ISMULTICOPTER 
 #endif
 
 #if defined(USE_MW)
@@ -233,15 +273,23 @@ enum pid {
 enum box {
   BOX_ARM,
   BOX_ANGLE,
+#if defined(USE_MW)
   BOX_HORIZON,
-  BOX_ACRO_TRAINER,
-  BOX_ALT_HOLD,
+#endif
+#if defined(ISMULTICOPTER)
   BOX_HEAD_FREE,
   BOX_HEAD_HOLD,
+#else
+  BOX_BYPASS,
+#endif
+  BOX_ALT_HOLD,
 #if defined(USE_TUNING)
-  BOX_TUNE,
-  BOX_ALT_TUNE,
   BOX_RELAY,
+#endif
+  BOX_EXP,
+#if defined(USE_GPS)
+  BOX_GPS_HOME,
+  BOX_GPS_HOLD,
 #endif
   CHECKBOX_ITEMS
 };
@@ -256,25 +304,23 @@ uint8_t ACC_CALIBRATED :
   1 ;
 uint8_t ANGLE_MODE :
   1 ;
+#if defined(USE_MW)
 uint8_t HORIZON_MODE :
   1 ;
+#endif
 uint8_t ALT_HOLD_MODE :
   1 ;  
-uint8_t ACRO_TRAINER_MODE :
-  1 ; 
 uint8_t HEAD_FREE_MODE :
   1 ;
 uint8_t HEAD_HOLD_MODE :
   1 ;
-uint8_t TUNE_MODE :
-  1;
-uint8_t ALT_TUNE_MODE :
-  1;
 uint8_t RELAY_MODE : 
   1;
 uint8_t BARO_ACTIVE :
   1 ; 
 uint8_t SMALL_ANGLE_25DEG :
+  1;
+  uint8_t STICKS_CENTRED :
   1;
 uint8_t CALIBRATE_MAG :
   1 ;
@@ -282,13 +328,23 @@ uint8_t MAG_ACTIVE:
   1;
 uint8_t MAG_CALIBRATED:
   1;
-uint8_t ENABLE_ACRO_TRAINER:
+uint8_t BYPASS_MODE:
   1;
 uint8_t GPS_ACTIVE:
   1;
 uint8_t SONAR_ACTIVE:
   1;
 uint8_t OPTIC_ACTIVE:
+  1;
+uint8_t EXP:
+  1;
+uint8_t GPS_FIX:
+  1;  
+uint8_t  GPS_FIX_HOME:
+  1;
+uint8_t  GPS_HOLD_MODE:
+  1;
+uint8_t  GPS_HOME_MODE:
   1;
 uint8_t ALARM:
   1;
@@ -297,8 +353,8 @@ f;
 
 // RC
 
-#define MINCHECK 1100
-#define MAXCHECK 1900
+#define MIN_CHECK 1100
+#define MAX_CHECK 1900
 
 #define ROL_LO  (1<<(2*ROLL))
 #define ROL_CE  (3<<(2*ROLL))
@@ -317,16 +373,24 @@ f;
 const char boxnames[] PROGMEM = // names for dynamic generation of config GUI
 "ARM;"
 "ANGLE;"
+#if defined(USE_MW)
 "HORIZ;"
-"ACRO.T;"
-"A.HOLD;"
+#endif
+#if defined(ISMULTICOPTER)
 "H.FREE;"
 "H.HOLD;"
+#else
+"BYPASS;"
+#endif
+"A.HOLD;"
+#if defined(USE_GPS)
+"RTH;"
+"P.HOLD;"
+#endif
 #if defined(USE_TUNING)
-"TUNE;"
-"A.TUNE;"
 "RELAY;"
 #endif
+"EXP;"
 ;
 
 const char pidnames[] PROGMEM =
@@ -345,16 +409,24 @@ const char pidnames[] PROGMEM =
 const uint8_t boxids[] PROGMEM = {
   1 << BOX_ARM, 
   1 << BOX_ANGLE, 
+#if defined(USE_MW)
   1 << BOX_HORIZON,
-  1 << BOX_ACRO_TRAINER,
-  1 << BOX_ALT_HOLD,
-  1 << BOX_HEAD_FREE, 
-  1 << BOX_HEAD_HOLD, 
-#if defined(USE_TUNING)
-  1 << BOX_TUNE,
-  1 << BOX_ALT_TUNE,
-  1 << BOX_RELAY,
 #endif
+#if defined(ISMULTICOPTER)
+  1 << BOX_HEAD_FREE, 
+  1 << BOX_HEAD_HOLD,
+#else
+  1 << BOX_BYPASS,
+#endif
+  1 << BOX_ALT_HOLD,
+#if defined(USE_GPS)
+  1 << BOX_GPS_HOME,
+  1 << BOX_GPS_HOLD
+#endif
+#if defined(USE_TUNING)
+    1 << BOX_RELAY,
+#endif
+  1 << BOX_EXP,
 };
 
 
@@ -369,21 +441,32 @@ const uint8_t boxids[] PROGMEM = {
 #define MAG_ORIENTATION(X, Y, Z)  {magADC[ROLL]  =  X; magADC[PITCH]  =  Y; magADC[YAW]  = Z;} // GY86 upside down SW I2C
 #endif
 
+#if ((defined(QUADX) + defined(QUADP) + defined(FLYING_WING) + defined(AIRPLANE) + defined(VTAIL)) > 1)
+#error "Select only QUADX, QUADP, FLYING_WING or AIRPLANE"
+#endif
+
 #if ((defined(USE_BOSCH_BARO) + defined(USE_MS_BARO) + defined(USE_SONAR)) > 1)
 #error "Select only ONE of SONAR or MS5611 or BMP085 barometer"
 #endif
 
-#if !defined(NUMBER_MOTOR)
-#error "NUMBER_MOTOR is not set, most likely you have not defined any type of multicopter"
+#if !defined(PWM_OUTPUTS)
+#error "PWM_OUTPUTS is not set, most likely you have not defined any type of aircraft"
 #endif
 
-#if (!defined(__AVR_ATmega32U4__) || ((NUMBER_MOTOR !=4) || defined(SERVO)))
-#error "Implementation restriction: must be exactly 4 DC_MOTORS and no SERVOS and use Atmel 32u4 (Leonard)"
+#if (PWM_OUTPUTS > 5)
+#error "PWM_OUTPUTS must be less than 6"
 #endif
 
-#if ((defined(USE_QUICK_TUNE) + defined(USE_QUICK_ALT_TUNE) +  defined(USE_RELAY_TUNE))>1)
-#error "Only one tuning scheme permitted at a time (USE_QUICK_TUNE or USE_QUICK_ALT_TUNE)" // or USE_RELAY_TUNE)"
-#endif
+//#if (!defined(__AVR_ATmega32U4__) || ((PWM_OUTPUTS !=4) || defined(SERVO)))
+//#error "Implementation restriction: must be exactly 4 DC_MOTORS and no SERVOS and use Atmel 32u4 (Leonardo)"
+//#endif
+
+
+
+
+
+
+
 
 
 

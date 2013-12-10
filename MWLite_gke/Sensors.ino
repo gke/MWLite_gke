@@ -62,6 +62,7 @@ void conditionGyro(void) {
         global_conf.gyroZero[axis] = (g[axis] + 256) >> 9;
         writeGlobalSet(0);
         blinkLED(50,1); 
+        zeroAngles();
       }
     }
     calibratingG--;
@@ -85,7 +86,7 @@ int16_t inline accFilter(uint8_t axis, int32_t a) {
     0, 0, GRAVITY
   };
 
-  if (!(f.TUNE_MODE )) { // || f.RELAY_MODE)) {
+  if (!f.RELAY_MODE) {
     F[axis] -= F[axis] >> 4;
     F[axis] += a;
     return (F[axis] >> 4); 
@@ -121,7 +122,8 @@ void conditionAcc(void) {
         global_conf.accZero[axis] = (a[axis] + 256) >> 9;
       global_conf.accZero[YAW] -= GRAVITY; 
       global_conf.accCalibrated = f.ACC_CALIBRATED = true; 
-      writeGlobalSet(1);              
+      writeGlobalSet(1);  
+      zeroAngles();      
     }
     calibratingA--;
   }
@@ -142,15 +144,21 @@ void initMPU6050(void) {
   i2cWriteReg(I2CMPU, MPU6050_ADDRESS, 0x1A, MPU6050_DLPF_CFG);
   i2cWriteReg(I2CMPU, MPU6050_ADDRESS, 0x1B, 0x18); // +/- 2000deg
   i2cWriteReg(I2CMPU, MPU6050_ADDRESS, 0x1C, 0x10); // +/-4096 1G
-
+  i2cWriteReg(I2CMPU, MPU6050_ADDRESS, 0x37, 0x02); // enable I2C bypass
   delay(100);
 
 } // initMPU6050
 
 void getRatesAndAccelerations(void) {
+  uint32_t NowuS;
+  static uint32_t prevMPU6050UpdateuS = micros() - conf.cycletimeuS;
   static uint8_t rawADC[14];
 
   i2cReadToBuf(I2CMPU, MPU6050_ADDRESS, 0x3B, rawADC, 14);
+
+  NowuS = micros();
+  dTuS = NowuS - prevMPU6050UpdateuS;
+  prevMPU6050UpdateuS = NowuS;
 
   ACC_ORIENTATION( ((rawADC[0] << 8) | rawADC[1]), 
   ((rawADC[2] << 8) | rawADC[3]),
@@ -596,11 +604,11 @@ static boolean magInit = false;
 #define HMC5883_R_CONFA 0
 #define HMC5883_R_CONFB 1
 #define HMC5883_R_MODE 2
-#define HMC5883_X_SELF_TEST_GAUSS (+1.16)                       //!< X axis level when bias current is applied.
-#define HMC5883_Y_SELF_TEST_GAUSS (+1.16)   //!< Y axis level when bias current is applied.
-#define HMC5883_Z_SELF_TEST_GAUSS (+1.08)                       //!< Y axis level when bias current is applied.
-#define SELF_TEST_LOW_LIMIT  (243.0/390.0)   //!< Low limit when gain is 5.
-#define SELF_TEST_HIGH_LIMIT (575.0/390.0)   //!< High limit when gain is 5.
+#define HMC5883_X_SELF_TEST_GAUSS (+1.16) //!< X axis level when bias current is applied.
+#define HMC5883_Y_SELF_TEST_GAUSS (+1.16) //!< Y axis level when bias current is applied.
+#define HMC5883_Z_SELF_TEST_GAUSS (+1.08) //!< Y axis level when bias current is applied.
+#define SELF_TEST_LOW_LIMIT  (243.0/390.0) //!< Low limit when gain is 5.
+#define SELF_TEST_HIGH_LIMIT (575.0/390.0) //!< High limit when gain is 5.
 #define HMC_POS_BIAS 1
 #define HMC_NEG_BIAS 2
 
@@ -612,7 +620,7 @@ static boolean magInit = false;
 #define MAG_DATA_REGISTER 0x03
 
 boolean hmc5883Active(void) {
-  return (i2cReadReg(I2CMAG, MAG_ADDRESS, 0x0a) == 'H');
+   return (i2cReadReg(I2CMAG, MAG_ADDRESS, 0x0a) == 'H');
 } //  hmc5883Active
 
 void hmc5883Init(void) {
@@ -629,9 +637,9 @@ void hmc5883Init(void) {
 
     for ( bias = HMC_POS_BIAS; bias <= HMC_NEG_BIAS; bias++) {
 
-      i2cWriteReg(I2CMAG, MAG_ADDRESS,HMC5883_R_CONFA, 0x010 + bias); 
+      i2cWriteReg(I2CMAG, MAG_ADDRESS, HMC5883_R_CONFA, 0x010 + bias); 
       i2cWriteReg(I2CMAG, MAG_ADDRESS, HMC5883_R_CONFB, 2 << 5);  //Set the Gain
-      i2cWriteReg(I2CMAG, MAG_ADDRESS,HMC5883_R_MODE, 1);
+      i2cWriteReg(I2CMAG, MAG_ADDRESS, HMC5883_R_MODE, 1);
 
       delay(MAG_UPDATE_MS);
       getHMC5883(); // discard first sample
@@ -660,6 +668,7 @@ void hmc5883Init(void) {
     i2cWriteReg(I2CMAG, MAG_ADDRESS ,HMC5883_R_CONFA ,0x70 ); //Configuration Register A  -- 0 11 100 00  num samples: 8 ; output rate: 15Hz ; normal measurement mode
     i2cWriteReg(I2CMAG, MAG_ADDRESS ,HMC5883_R_CONFB ,0x20 ); //Configuration Register B  -- 001 00000    configuration gain 1.3Ga
     i2cWriteReg(I2CMAG, MAG_ADDRESS ,HMC5883_R_MODE  ,0x00 ); //Mode register             -- 000000 00    continuous Conversion Mode
+    
     delay(MAG_UPDATE_MS);
 
     magInit = true;
@@ -671,7 +680,11 @@ boolean getHMC5883(void) { // 460uS
 
   slotFree = false;
 
+#if defined(USE_AUX_BUS)
+  i2cReadToBuf(I2CMPU, MPU6050_ADDRESS, 0x49, rawADC, 6);
+#else
   i2cReadToBuf(I2CMAG, MAG_ADDRESS, MAG_DATA_REGISTER, rawADC, 6);
+#endif
   MAG_ORIENTATION( ((rawADC[0]<<8) | rawADC[1]),
   ((rawADC[4]<<8) | rawADC[5]),
   ((rawADC[2]<<8) | rawADC[3]) );
@@ -871,6 +884,8 @@ void initSensors(void) {
   hmc5883Init();
 #endif
 } // initSensors
+
+
 
 
 

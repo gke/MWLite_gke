@@ -29,8 +29,16 @@
  no servos and 8KHz PWM for brushed DC motors.
  
  */
- 
+
 #define UART_NUMBER 2
+
+#if defined(AIRPLANE)
+const uint8_t pwmMap[8] = {
+  7,0,1,2,1,3,4,0};
+#else
+const uint8_t pwmMap[8] = {
+  0,2,1,2,1,3,4,0};
+#endif
 
 #define RX_BUFFER_SIZE 64
 #define TX_BUFFER_SIZE 128
@@ -157,7 +165,7 @@ void serialCom() {
     WaitPayload,
   } 
   MSPState[UART_NUMBER] = {
-    WaitSentinel                };
+    WaitSentinel                                  };
 
   for(n=0;n<UART_NUMBER;n++) {
     CURRENTPORT=n;
@@ -286,6 +294,7 @@ enum Sensors {
 
 void evaluateCommand() { 
   uint8_t len, i;
+  int16_t Temp;
 
   switch(cmdMSP[CURRENTPORT]) {
   case MSP_SET_RAW_RC:
@@ -328,48 +337,62 @@ void evaluateCommand() {
     break;
   case MSP_STATUS:
     headSerialReply(11);
-    serialize16(cycleTime);
+    serialize16(cycleTimeuS);
     serialize16(i2cErrors);
-    
+
     serialize16(f.ACC_CALIBRATED << SENS_ACC | 
       f.BARO_ACTIVE << SENS_BARO | 
       (f.MAG_ACTIVE && f.MAG_CALIBRATED) << SENS_MAG | 
       f.GPS_ACTIVE << SENS_GPS | 
       f.SONAR_ACTIVE << SENS_SONAR | 
       f.OPTIC_ACTIVE << SENS_OPTIC ); 
-  
-    serialize32( f.ANGLE_MODE << BOX_ANGLE |
+
+    serialize32( 
+    f.ARMED << BOX_ARM |
+      f.ANGLE_MODE << BOX_ANGLE |
+      #if defined(USE_MW)
       f.HORIZON_MODE << BOX_HORIZON |
-      f.ACRO_TRAINER_MODE << BOX_ACRO_TRAINER |
-      f.ALT_HOLD_MODE << BOX_ALT_HOLD|
+      #endif
+#if defined(ISMULTICOPTER)
       f.HEAD_FREE_MODE << BOX_HEAD_FREE |
       f.HEAD_HOLD_MODE << BOX_HEAD_HOLD |
-      f.ARMED << BOX_ARM
-#if defined(USE_TUNING)
-      | f.TUNE_MODE << BOX_TUNE |
-      f.ALT_TUNE_MODE << BOX_ALT_TUNE
-     // | f.RELAY_MODE << BOX_RELAY
+#else
+      f.BYPASS_MODE << BOX_BYPASS |
 #endif
+      f.ALT_HOLD_MODE << BOX_ALT_HOLD
+#if defined(USE_GPS)
+      | f.GPS_HOME_MODE << BOX_GPS_HOME
+      | f.GPS_HOLD_MODE << BOX_GPS_HOLD
+#endif
+#if defined(USE_TUNING)
+      | f.RELAY_MODE << BOX_RELAY
+#endif
+    | f.EXP << BOX_EXP
+
       );
     serialize8(0); // current parameter set
     break;
   case MSP_RAW_IMU:
     headSerialReply(18);
-  // for(i = 0; i < 3; i++) serialize16((accData[i] * (GRAVITY_R * 180.0)/PI));
-  // for(i = 0; i < 3; i++) serialize16(asin(constrain(accData[i] * GRAVITY_R, -1.0, 1.0)) * (180.0/PI));
+    // for(i = 0; i < 3; i++) serialize16((accData[i] * (GRAVITY_R * 180.0)/PI));
+    // for(i = 0; i < 3; i++) serialize16(asin(constrain(accData[i] * GRAVITY_R, -1.0, 1.0)) * (180.0/PI));
     for(i = 0; i < 3; i++) serialize16(((int32_t)accData[i] * 100) >> 12);
     for(i = 0; i < 3; i++) serialize16(gyroData[i]);
     for(i = 0; i < 3; i++) serialize16(magADC[i]);
     break;
   case MSP_SERVO:
     headSerialReply(16);
-    for(i = 0; i < 8; i++)
-      serialize16(0);
+    for(i = 0; i < 8; i++) {
+      Temp = pwm[pwmMap[i]];
+      if (pwmMap[i] != 0)
+        Temp += MIDRC; 
+      serialize16(Temp);
+    }
     break;
   case MSP_MOTOR:
     headSerialReply(16);
     for(i = 0; i < 8; i++)
-      serialize16( (i < NUMBER_MOTOR) ? motor[i] : 0 );
+      serialize16( (i < PWM_OUTPUTS) ? pwm[i] : 0 );
     break;
   case MSP_RC:
     headSerialReply(RC_CHANS * 2);
@@ -438,7 +461,8 @@ void evaluateCommand() {
     headSerialReply(0);
     break;
   case MSP_ACC_CALIBRATION:
-    if(!f.ARMED) calibratingA = 512;
+    if(!f.ARMED) 
+      calibratingA = 512;
     headSerialReply(0);
     break;
   case MSP_MAG_CALIBRATION:
@@ -593,6 +617,10 @@ uint8_t SerialPeek(uint8_t port) {
 }
 #endif
 
+bool SerialTXfree(uint8_t port) {
+  return (serialHeadTX[port] == serialTailTX[port]);
+}
+
 uint8_t SerialAvailable(uint8_t port) {
 
   if(port == 0) return USB_Available(USB_CDC_RX);
@@ -605,6 +633,15 @@ void SerialWrite(uint8_t port,uint8_t c){
   serialize8(c);
   UartSendData();
 } // SerialWrite
+
+
+
+
+
+
+
+
+
 
 
 

@@ -29,8 +29,8 @@
  no servos and 8KHz PWM for brushed DC motors.
  
  */
- 
- #include <avr/eeprom.h>
+
+#include <avr/eeprom.h>
 
 
 uint8_t calculate_sum(uint8_t *cb , uint8_t siz) {
@@ -39,14 +39,14 @@ uint8_t calculate_sum(uint8_t *cb , uint8_t siz) {
   return sum;
 } // calculate_sum
 
-void readGlobalSet() {
+void readGlobalSet(void) {
   eeprom_read_block((void*)&global_conf, (void*)0, sizeof(global_conf));
 
   f.ACC_CALIBRATED = global_conf.accCalibrated;
   f.MAG_CALIBRATED = global_conf.magCalibrated;
 } // readGlobalSet
 
-void readEEPROM() {
+void readEEPROM(void) {
   uint8_t i;
   int16_t tmp, y;
   int16_t thrMid, thrExpo;
@@ -63,15 +63,19 @@ void readEEPROM() {
 
 #if defined(USE_THROTTLE_CURVE)
 
-  for(i = 0; i<11; i++ ) {
-    tmp = 10 * i - conf.thrMid8;
-    y = 1;
-    if ( tmp > 0 ) y = 100 - conf.thrMid8;
-    if ( tmp < 0 ) y = conf.thrMid8;
+  // 500/128 = 3.90625    3.9062 * 3.9062 = 15.259   1526*100/128 = 1192
+  for(i = 0; i < 5; i++) 
+    rollpitchCurve[i] = (1526+conf.rcExpo8*(sq(i)-15))*i*(int32_t)conf.rcRate8/1192;
 
-    thrCurve[i] = 10 * conf.thrMid8 + tmp*( 100 - conf.thrExpo8 + (int32_t)conf.thrExpo8 * sq(tmp)/sq(y) )/10; // [0;1000]
-    thrCurve[i] = conf.minthrottle + (int32_t)(MAXTHROTTLE - conf.minthrottle) * thrCurve[i]/1000; // [0;1000] -> [conf.minthrottle;MAXTHROTTLE]
+  for(i = 0; i < 11; i++) {
+    int16_t tmp = 10*i-conf.thrMid8;
+    uint8_t y = 1;
+    if (tmp>0) y = 100-conf.thrMid8;
+    if (tmp<0) y = conf.thrMid8;
+    thrCurve[i] = 10*conf.thrMid8 + tmp*( 100-conf.thrExpo8+(int32_t)conf.thrExpo8*sq(tmp)/sq(y) )/10; // [0;1000]
+    thrCurve[i] = conf.minthrottle + (int32_t)(MAX_THROTTLE-conf.minthrottle)* thrCurve[i]/1000;  // [0;1000] -> [conf.minthrottle;MAXTHROTTLE]
   }
+
 #endif // USE_THROTTLE_CURVE 
 
 } // readEEPROM
@@ -94,83 +98,38 @@ void writeParams(uint8_t b) {
 } // writeParams
 
 void LoadDefaults(void) {
+  uint8_t i;
 
   memset(&conf, 0, sizeof(conf));
 
-#if defined(USE_MW)
+#include "EEPROMParams.h"
 
-  conf.P8[ROLL] = 40;  
-  conf.I8[ROLL] = 30; 
-  conf.D8[ROLL] = 23;
-
-  conf.P8[PITCH] = 40; 
-  conf.I8[PITCH] = 30; 
-  conf.D8[PITCH] = 23;
-  
-  conf.P8[YAW] = 80;  
-  conf.I8[YAW] = 25;  
-
-  conf.P8[PIDLEVEL] = 90; 
-  conf.I8[PIDLEVEL] = 1; 
-  conf.D8[PIDLEVEL] = 100;
-
-  conf.P8[PIDMAG]   = 40;
-
-  conf.rcRate8 = 80; 
-  conf.rcExpo8 = 50;
-  conf.rollPitchRate = 60;
-  conf.yawRate = 100;
-
-  conf.dynThrPID = 0;
-
-#else
-
-  conf.P8[ROLL] = 35;   
-  conf.I8[ROLL] = 60; 
-  conf.D8[ROLL] = 25;
-  conf.P8[PITCH] = 35;  
-  conf.I8[PITCH] = 60; 
-  conf.D8[PITCH] = 25;
-  conf.P8[YAW] = 80;  
-  conf.I8[YAW] = 25; 
-
-  conf.P8[PIDLEVEL] = 90; 
-  conf.I8[PIDLEVEL] = 1; 
-  conf.D8[PIDLEVEL] = 100;
-
-  conf.P8[PIDMAG] = 40; 
-
-  conf.rcRate8 = 100; 
-  conf.yawRate = 100;
-
-#endif // USE_MW_XXX
-
-#ifdef USE_THROTTLE_CURVE
-  conf.thrMid8 = 45; 
-  conf.thrExpo8 = 40;
-#else  
-  conf.thrMid8 = 50; 
-  conf.thrExpo8 = 0; 
-#endif // USE_THROTTLE_CURVE
-
-  conf.P8[PIDALT] = 64; 
-  conf.I8[PIDALT] = 25; 
-  conf.D8[PIDALT] = 24;
-
-  for(uint8_t i = 0; i < CHECKBOX_ITEMS; i++)
+  for(i = 0; i < CHECKBOX_ITEMS; i++)
     conf.activate[i] = 0;
 
+#if defined(ISMULTICOPTER)  
+  f.ANGLE_MODE = true; 
+  conf.activate[BOX_ANGLE] = 3; // Aux1 all positions
+#else
   f.ANGLE_MODE = true; 
   conf.activate[BOX_ANGLE] = 7; // Aux1 all positions
+  f.BYPASS_MODE = true;
+  conf.activate[BOX_BYPASS] = 6; // Aux1 
+#endif
 
   conf.cycletimeuS = CYCLETIME;
-  conf.minthrottle = MINTHROTTLE;
+
+  conf.minthrottle = MIN_THROTTLE;
 
   writeParams(0); // this will also (p)reset this Version with the current version number again.
 
   calibratingG = 512;
 
 } // loadDefaults
+
+
+
+
 
 
 

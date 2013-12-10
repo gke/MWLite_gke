@@ -42,7 +42,8 @@ static boolean  rcOptions[CHECKBOX_ITEMS];
 static uint32_t NowuS;
 static uint32_t previousCycleuS = 0;
 static uint32_t nextCycleuS = 0;
-static uint16_t cycleTime = 0;
+static uint16_t dTuS;
+static uint16_t cycleTimeuS = 0;
 static int16_t  i2cErrors = 0;
 static boolean slotFree = true;
 
@@ -60,12 +61,15 @@ static int32_t tuneAltStimulus;
 
 // RC
 
-static int16_t rcData[RC_CHANS];    // interval [1000;2000]
+//static int16_t maxRollPitchStick = 0;
+static int16_t rcData[RC_CHANS]; // [1000:2000]
 static int16_t rcCommand[RC_CHANS]; // interval [1000;2000] for THROTTLE and [-500;+500] for ROLL/PITCH/YAW 
-static uint16_t thrCurve[33];// lookup table for expo & mid THROTTLE
+static uint16_t thrCurve[11]; // lookup table for expo & mid THROTTLE
+static uint16_t rollpitchCurve[5]; // lookup table roll and pitch
 
 static boolean rcNewValues = false;
 static boolean inFailsafe = false;
+static boolean firstRC = true;
 
 // IMU
 
@@ -96,29 +100,33 @@ static int16_t  ROC; // variometer in cm/s
 static int32_t densityAltitude = 0; // cm
 static int16_t AltitudeIntE = 0;
 static int32_t desiredAltitude;
-static int16_t altPID;
+static int16_t altPID = 0;
 static uint16_t hoverThrottle = 1300;
 
 // PID
 
-int16_t RateIntE[3] = {
+int32_t RateIntE[3] = {
   0,0,0};
-int16_t AngleIntE[2] = {
+int32_t AngleIntE[2] = {
   0,0};
 
-// Motors
+// PWM outputs
 
 static int16_t axisPID[3];
-static int16_t motor[NUMBER_MOTOR];
+static int16_t pwm[8], pwmP[8]; 
+static int16_t flaperons = 0;
 
 // EEPROM
 
-static uint8_t dynP8[3], dynI8[3], dynD8[3];
+static struct {
+uint8_t P8[3], I8[3], D8[3];
+} dyn;
 
 static struct {
   int16_t accZero[3];
   int16_t gyroZero[3];
   int16_t magZero[3];
+  int16_t trim[PWM_OUTPUTS];
   float RelayK[3], RelayP[3];
   boolean accCalibrated, magCalibrated;
   uint8_t checksum; // must be last! 
@@ -138,7 +146,7 @@ static struct {
   uint16_t activate[CHECKBOX_ITEMS];
   uint16_t cycletimeuS;
   int16_t minthrottle;
-  uint8_t  checksum; // must be last! 
+  uint8_t checksum; // must be last! 
 } 
 conf;
 
@@ -217,16 +225,17 @@ void setup() {
   ADCSRA &= ~_BV(ADPS0); // http://www.arduino.cc/cgi-bin/yabb2/YaBB.pl?num=1208715493/11
 
   zeroIntegrals();
-  angle[ROLL] = angle[PITCH] = angle[YAW] = 0;
+  zeroAngles();
   relativeAltitude = ROC = 0;
-  previousCycleuS = micros();
+  
+  //initGPS();
 
 } // setup
 
 
 void loop (void) {
 
-  cycleTime = micros() - previousCycleuS;
+  cycleTimeuS = micros() - previousCycleuS;
 
   while(micros() < nextCycleuS) {
   }; // wait
@@ -235,15 +244,15 @@ void loop (void) {
 
   previousCycleuS = micros();
   nextCycleuS = previousCycleuS + conf.cycletimeuS;
-
+  
   getRatesAndAccelerations();
   getEstimatedAttitude();  
   computeAltitudeControl();
   updateMagnetometer();
-
+  
   computeControl();
   mixTable();
-  writeMotors();
+  pwmWrite();
 
   if (newRCValues()){ 
     getRCInput(); 
@@ -257,6 +266,7 @@ void loop (void) {
   annexCode();
 
 } // loop
+
 
 
 

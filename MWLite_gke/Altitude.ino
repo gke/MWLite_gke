@@ -36,23 +36,17 @@ void doAltitudeControl(void) {
   static int16_t altCorr = 0;
   int16_t throttleDiff;
 
-  checkQuickAltTune();
-
   if (f.ARMED && f.ALT_HOLD_MODE && (f.BARO_ACTIVE || f.SONAR_ACTIVE)) {      
-    if (f.ALT_TUNE_MODE && tuningAlt) {
-      desiredAltitude = tuneAltStimulus;
-    } else {
-      if (abs(rcCommand[THROTTLE] - hoverThrottle) > ALT_HOLD_THROTTLE_NEUTRAL_ZONE) {
-        throttleDiff = rcCommand[THROTTLE] - hoverThrottle;
+    if (abs(rcCommand[THROTTLE] - hoverThrottle) > ALT_HOLD_THROTTLE_NEUTRAL_ZONE) {
+      throttleDiff = rcCommand[THROTTLE] - hoverThrottle;
 #ifdef USE_PROP_ALT_HOLD
-        desiredAltitude += throttleDiff/ALT_HOLD_THROTTLE_NEUTRAL_ZONE; 
+      desiredAltitude += throttleDiff/ALT_HOLD_THROTTLE_NEUTRAL_ZONE; 
 #else
-        desiredAltitude += Sign(throttleDiff) * ALT_HOLD_STEP;  // 40cm/S per step 
+      desiredAltitude += Sign(throttleDiff) * ALT_HOLD_STEP;  // 40cm/S per step 
 #endif
-        desiredAltitude = constrain(desiredAltitude, 100, ALT_HOLD_LIMIT_M * 100);
-        AltitudeIntE = 0;
-      } 
-    }
+      desiredAltitude = constrain(desiredAltitude, 100, ALT_HOLD_LIMIT_M * 100);
+      AltitudeIntE = 0;
+    } 
     rcCommand[THROTTLE] = hoverThrottle + altPID; // throttle is overriden by altitude hold
   }
 } // doAltitudeControl
@@ -178,6 +172,7 @@ void computeAltitudeControl(void) {
 } // computeAltitudeControl
 
 #endif
+
 
 
 

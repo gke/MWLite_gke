@@ -68,6 +68,7 @@
 
 //****** end of advanced users settings *************
 
+//1998?
 #define GYRO_SCALE ((1999.0f/32768.0f) * (PI/180.0f) * 0.000001f) //MPU6050
 //#define GYRO_SCALE (0.001064225154f * 0.000001f)
 

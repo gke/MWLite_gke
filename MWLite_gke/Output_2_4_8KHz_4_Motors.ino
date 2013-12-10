@@ -25,12 +25,13 @@
  addition of MW modes.
  
  Lite supports only Atmel 32u4 processors using an MPU6050 and optionally 
- BMP085 and MS5611 barometers and HMC5883 magnetometer with 4 motors, 
- no servos and 8KHz PWM for brushed DC motors.
+ BMP085 and MS5611 barometers and HMC5883 magnetometer with 4 motors at 8KHz PWM for brushed DC motors
+ or all servos for flying wing or aircraft.
  
  */
- 
-// Version Stripped for 4 motors and no servos
+
+// since we are uing the PWM generation in a direct way, the pin order is just to initialise the right pins 
+// its not possible to change a PWM output pin just by changing the order
 
 // set PWM frequency for DC motors
 
@@ -38,13 +39,50 @@
 //#define DC_SCALE 1 // 4KHz
 //#define DC_SCALE 2 // 2KHz
 
-// since we are uing the PWM generation in a direct way, the pin order is just to initialise the right pins 
-// its not possible to change a PWM output pin just by changing the order
-
 uint8_t PWM_PIN[] = {
-  9,10,5,6};   //for a quadx: Rear right, front right, rear left & front left; quad+: rear, right, left & front
+  9,10,5,6,11,13};   //for a quad+: rear,right,left,front
 
-void writeMotors() { 
+#if !defined(ISMULTICOPTER)
+#include <Servo.h>
+Servo pwmChan[PWM_OUTPUTS];
+const int8_t  servoReverse[] = SERVO_DIR; // Inverted servos
+static int16_t newtrims[PWM_OUTPUTS] = {
+  0};
+
+
+#if !defined(SERVO_MECH_TRIMS) // last resort if servos cannot be be machanically trimmed
+#define SERVO_MECH_TRIMS {0,0,0,0,0}
+#endif
+
+const int16_t servoMechTrims[5] = SERVO_MECH_TRIMS;
+
+void setServoTrims(void) {
+  uint8_t i;
+
+  for(i = 1; i < PWM_OUTPUTS; i++)
+    global_conf.trim[i] = newtrims[i];
+
+} // setServoTrims
+
+inline void doDifferential(uint8_t R, uint8_t L) {
+#if !defined(AILERON_DIFF)
+#define AILERON_DIFF 0
+#endif
+
+  if(AILERON_DIFF != 0) {
+    if(pwm[R] < 0)
+      pwm[R] = ((int32_t)pwm[R] * (100 - AILERON_DIFF))/100; // use 128? >> 7
+
+    if(pwm[L] < 0)
+      pwm[L] = ((int32_t)pwm[L] * (100 - AILERON_DIFF))/100;
+  }
+} // doDifferential
+
+#endif
+
+void pwmWrite() { 
+  uint8_t i;
+#if defined(ISMULTICOPTER)
 
 #if defined(DC_MOTORS)
 
@@ -52,25 +90,25 @@ void writeMotors() {
 
 #if defined(CESCO_OFFSET)
 
-  OCR1A = (motor[0]-1000) << 1; //  pin 9 (BR)
-  OCR1B = (motor[1]-1000) << 1; //  pin 10 (FR)
+  OCR1A = (pwm[0]-1000) << 1; //  pin 9 (BR)
+  OCR1B = (pwm[1]-1000) << 1; //  pin 10 (FR)
 
-  OCR3A = (motor[2]-1000) << 1; //  pin 5 (BL)
-  Temp = motor[3] - 1000;
+  OCR3A = (pwm[2]-1000) << 1; //  pin 5 (BL)
+  Temp = pwm[3] - 1000;
   TC4H = Temp >> 8;
   OCR4D = Temp & 0xFF; //  pin 6 (FL)
 
 #else
 
   // code due originally to Cesco 
-  OCR1A = (motor[0]-1000) << DC_SCALE; //  pin 9 (BR)
-  OCR1B = (motor[1]-1000) << DC_SCALE; //  pin 10 (FR)
+  OCR1A = (pwm[0]-1000) << DC_SCALE; //  pin 9 (BR)
+  OCR1B = (pwm[1]-1000) << DC_SCALE; //  pin 10 (FR)
 
-  Temp = 2047 - (motor[2]-1000); // 1023
+  Temp = 2047 - (pwm[2]-1000); // 1023
   TC4H = Temp >> 8; 
   OCR4A = Temp & 0xFF; //  pin 5 (BL)
 
-  Temp = motor[3] - 1000;
+  Temp = pwm[3] - 1000;
   TC4H = Temp >> 8; 
   OCR4D = Temp & 0xFF; //  pin 6 (FL)
 
@@ -78,33 +116,48 @@ void writeMotors() {
 
 #else // !DC_MOTORS
 
-  OCR1A = motor[0] << 3; //  pin 9 (BR)
-  OCR1B = motor[1] << 3; //  pin 10 (FR)
+  OCR1A = pwm[0] << 3; //  pin 9 (BR)
+  OCR1B = pwm[1] << 3; //  pin 10 (FR)
 #if defined(HWPWM6)
-  OCR3A = motor[2] << 3; //  pin 5 (BL)
+  OCR3A = pwm[2] << 3; //  pin 5 (BL)
 #else
   // to write values > 255 to timer 4 A/B we need to split the bytes
-  TC4H = (2047-motor[2]) >> 8; 
-  OCR4A = ((2047-motor[2])&0xFF); //  pin 5 (BL)
+  TC4H = (2047-pwm[2]) >> 8; 
+  OCR4A = ((2047-pwm[2])&0xFF); //  pin 5 (BL)
 #endif
-  TC4H = motor[3] >> 8; 
-  OCR4D = (motor[3]&0xFF); //  pin 6 (FL) 
+  TC4H = pwm[3] >> 8; 
+  OCR4D = (pwm[3]&0xFF); //  pin 6 (FL) 
 
 #endif // DC_MOTORS
 
-} // writeMotors
+#else // !ISMULTICOPTER
 
-void writeAllMotors(int16_t mc) {  
-  for (uint8_t i =0; i < NUMBER_MOTOR; i++)
-    motor[i]=mc;
-  writeMotors();
-} // writeAllMotors
+  pwmChan[0].writeMicroseconds(pwm[0]);
+  for(i = 1; i < PWM_OUTPUTS; i++) {
+    pwmP[i] = ((pwmP[i] * 15) + pwm[i] * servoReverse[i] + MIDRC + servoMechTrims[i]) >> 4;
+    pwmChan[i].writeMicroseconds(pwmP[i]); // + global_conf.trim[i]);// 
+  }
+
+#endif
+
+} // pwmWrite
+
+void pwmWriteAll(int16_t mc) { 
+
+  for (uint8_t i = 0; i < PWM_OUTPUTS; i++)
+    pwm[i]=mc;
+  pwmWrite();
+
+} // pwmWriteAll
 
 void initOutput() {
   uint32_t TimeoutuS;
+  uint8_t i;
 
-  for (uint8_t i = 0; i < NUMBER_MOTOR; i++) 
-    pinMode(PWM_PIN[i],OUTPUT);
+  for (i = 0; i < PWM_OUTPUTS; i++) 
+    pinMode(PWM_PIN[i], OUTPUT);
+
+#if defined(ISMULTICOPTER)
 
 #ifdef DC_MOTORS
 
@@ -199,8 +252,20 @@ void initOutput() {
 
 #endif // DC_MOTORS
 
-  writeAllMotors(MINCOMMAND);
+  pwmWriteAll(MIN_COMMAND);
+
+#else // FLYING_WING || AIRCRAFT
+
+  for (i = 0; i < PWM_OUTPUTS; i++) {
+    pwmChan[i].attach(PWM_PIN[i], PWM_MIN, PWM_MAX);
+    pwm[i] = pwmP[i] = (i == THROTTLE) ? MIN_COMMAND : MIDRC;
+    pwmChan[i].writeMicroseconds(pwm[i]);
+  }
+
+#endif
+
   delay(300);
+
 } // initOutput
 
 
@@ -208,49 +273,184 @@ void mixTable() {
   int16_t maxMotor;
   uint8_t i;
 
-#define PIDMIX(X,Y,Z) rcCommand[THROTTLE] + axisPID[ROLL]*X + axisPID[PITCH]*Y + (YAW_DIRECTION) * axisPID[YAW]*Z
+#if defined(ISMULTICOPTER)
+
+#define PIDMIX(X,Y,Z)  rcCommand[THROTTLE] + axisPID[ROLL]*X + axisPID[PITCH]*Y + (YAW_DIR) * axisPID[YAW]*Z
 
 #if defined(QUADP)
-  motor[0] = PIDMIX( 0,+1,-1); //REAR
-  motor[1] = PIDMIX(-1, 0,+1); //RIGHT
-  motor[2] = PIDMIX(+1, 0,+1); //LEFT
-  motor[3] = PIDMIX( 0,-1,-1); //FRONT
+
+  pwm[0] = PIDMIX( 0,+1,-1); //REAR
+  pwm[1] = PIDMIX(-1, 0,+1); //RIGHT
+  pwm[2] = PIDMIX(+1, 0,+1); //LEFT
+  pwm[3] = PIDMIX( 0,-1,-1); //FRONT
+
 #elif defined(QUADX)
-  motor[0] = PIDMIX(-1,+1,-1); //REAR_R
-  motor[1] = PIDMIX(-1,-1,+1); //FRONT_R
-  motor[2] = PIDMIX(+1,+1,+1); //REAR_L
-  motor[3] = PIDMIX(+1,-1,-1); //FRONT_L
+
+  pwm[0] = PIDMIX(-1,+1,-1); //REAR_R
+  pwm[1] = PIDMIX(-1,-1,+1); //FRONT_R
+  pwm[2] = PIDMIX(+1,+1,+1); //REAR_L
+  pwm[3] = PIDMIX(+1,-1,-1); //FRONT_L
+
 #endif
 
-// Preserve attitude control headroom
 
 #if defined(USE_HEADROOM)
-  maxMotor = motor[0];
-  for (i = 1; i< NUMBER_MOTOR; i++)
-    if (motor[i] > maxMotor) maxMotor = motor[i];
 
-  for(i = 0; i< NUMBER_MOTOR; i++) {
-    if (maxMotor > MAXTHROTTLE)
-      motor[i] -= maxMotor - MAXTHROTTLE;
+  maxMotor = pwm[0];
+  for (i = 1; i < PWM_OUTPUTS; i++) 
+    if (pwm[i] > maxMotor) maxMotor = pwm[i];
 
-    motor[i] = constrain(motor[i], conf.minthrottle, MAXTHROTTLE); 
+  for(i = 0; i < PWM_OUTPUTS; i++) {
+    if (maxMotor > MAX_THROTTLE)
+      pwm[i] -= maxMotor - MAX_THROTTLE;
+
+    pwm[i] = constrain(pwm[i], conf.minthrottle, MAX_THROTTLE); 
 
     if (!f.ARMED)
-      motor[i] = MINCOMMAND;
+      pwm[i] = MIN_COMMAND;
     else
-      if (rcData[THROTTLE] < MINCHECK)
-        motor[i] = EFF_MINCOMMAND;
-
+      if (rcData[THROTTLE] < MIN_CHECK)
+        pwm[i] = EFF_MIN_COMMAND;
   }
+
 #else
-  for(i = 0; i< NUMBER_MOTOR; i++)
+
+  for(i = 0; i < PWM_OUTPUTS; i++)
     if (!f.ARMED)
-      motor[i] = MINCOMMAND;
+      pwm[i] = MIN_COMMAND;
     else
-      if (rcData[THROTTLE] < MINCHECK)
-        motor[i] = EFF_MINCOMMAND;
+      if (rcData[THROTTLE] < MIN_CHECK)
+        pwm[i] = EFF_MIN_COMMAND;
+
 #endif
+
+
+#else
+
+  static bool firstPWM = true;
+  static uint16_t zzz = 0;
+  const int8_t   servoLimit[5][2] = SERVO_LIMITS; // Rates in 0-100%
+
+#if defined(FLYING_WING)
+
+  if (f.BYPASS_MODE) {
+    pwm[RightElevon]  = rcCommand[ROLL];
+    pwm[LeftElevon]  = -rcCommand[ROLL];
+  }
+  else {
+    pwm[RightElevon]  = axisPID[ROLL];
+    pwm[LeftElevon]  = -axisPID[ROLL];   
+  }
+
+  doDifferential(RightElevon, LeftElevon); // only for correction removal of mechanical differential
+
+  if (f.BYPASS_MODE) {
+    pwm[RightElevon] -= rcCommand[PITCH];
+    pwm[LeftElevon] -= rcCommand[PITCH];
+  }
+  else {
+    pwm[RightElevon] -= axisPID[PITCH];
+    pwm[LeftElevon] -= axisPID[PITCH];   
+  }
+
+#elif defined(AIRPLANE) || defined(VTAIL) 
+
+  flaperons = 0; //rcCommand[AUX4];
+
+  if(f.BYPASS_MODE){
+    pwm[RightAileron] = rcCommand[ROLL];
+    pwm[LeftAileron] = -rcCommand[ROLL];
+#if defined(VTAIL)
+    pwm[RightRudder] = -rcCommand[YAW] + rcCommand[PITCH];
+    pwm[LeftRudder] = rcCommand[YAW] + rcCommand[PITCH];
+#else
+    pwm[Rudder] = rcCommand[YAW];
+    pwm[Elevator] = rcCommand[PITCH];
+#endif
+  }
+  else {
+    pwm[RightAileron] = axisPID[ROLL] ;
+    pwm[LeftAileron]  = -axisPID[ROLL];
+#if defined(VTAIL)
+    pwm[RightRudder] = axisPID[YAW] + axisPID[PITCH];
+    pwm[LeftRudder] = axisPID[YAW] + axisPID[PITCH];
+#else
+    pwm[Rudder] = axisPID[YAW]; 
+    pwm[Elevator] = axisPID[PITCH];
+#endif
+  }
+
+  doDifferential(RightAileron, LeftAileron);
+
+  pwm[RightAileron] += flaperons;
+  pwm[LeftAileron] += flaperons;
+
+#endif // AIRPLANE
+
+  pwm[0] = f.ARMED ? rcData[THROTTLE] : MIN_COMMAND;
+
+  for(i = 1; i < PWM_OUTPUTS; i++)
+    pwm[i] = constrain(pwm[i], servoLimit[i][0] * 5, servoLimit[i][1] * 5);
+
+  if (firstPWM && !firstRC) {
+    for(i = 1; i < PWM_OUTPUTS; i++)
+      newtrims[i] = pwm[i] * servoReverse[i];
+    firstPWM = false;
+  }
+
+#if defined(DEBUG_TRIMS) 
+  // debug[1] = global_conf.trim[RightAileron];
+  // debug[2] = global_conf.trim[Elevator];
+  // debug[3] = global_conf.trim[Rudder];
+  for(i = 1; i < 4; i++)
+    debug[i] = rcCommand[i];
+#endif
+
+#endif
+
 } // mixTable
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 

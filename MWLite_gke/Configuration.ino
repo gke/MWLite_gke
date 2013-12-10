@@ -35,14 +35,23 @@
 void blinkLED(uint8_t t, uint8_t repeat) { 
   uint8_t r;
 
-  if ((rcCommand[THROTTLE] < MINTHROTTLE) && !f.ARMED) 
+  if ((rcCommand[THROTTLE] < MIN_THROTTLE) && !f.ARMED) 
     for (r = 0; r < repeat; r++) {
-        LED_BLUE_TOGGLE; 
-        delay(t);
-        LED_BLUE_TOGGLE;
-      }
+      LED_BLUE_TOGGLE; 
+      delay(t);
+      LED_BLUE_TOGGLE;
+    }
 } // blinkLED
 
+
+void zeroIntegrals(void) {
+  memset(&RateIntE, 0, sizeof(RateIntE));
+  memset(&AngleIntE, 0, sizeof(AngleIntE));
+} // zeroIntegrals
+
+inline void zeroAngles(void) {
+  angle[ROLL] = angle[PITCH] = angle[YAW] = 0;
+} // zeroAngles
 
 void doArm(void) {
 
@@ -70,7 +79,7 @@ void doArm(void) {
   }
   else
     blinkLED(200, 1);
-  
+
 } // doArm
 
 void doDisarm(void) {
@@ -112,9 +121,9 @@ void doConfigUpdate(void) {
 
   for(i = 0; i < 4; i++) {
     newSticks >>= 2;
-    if(rcData[i] > MINCHECK) 
+    if(rcData[i] > MIN_CHECK) 
       newSticks |= 0x80; // check for MIN
-    if(rcData[i] < MAXCHECK) 
+    if(rcData[i] < MAX_CHECK) 
       newSticks |= 0x40; // check for MAX
   }
 
@@ -127,7 +136,7 @@ void doConfigUpdate(void) {
   rcSticks = newSticks;
 
   // perform actions    
-  if (rcData[THROTTLE] <= MINCHECK) { 
+  if (rcData[THROTTLE] <= MIN_CHECK) { 
     zeroIntegrals();
     if (conf.activate[BOX_ARM] > 0) // Arming via ARM BOX_
       if ( rcOptions[BOX_ARM] && f.OK_TO_ARM && !f.ARMED ) 
@@ -149,12 +158,11 @@ void doConfigUpdate(void) {
         switch (rcSticks) {
           //case THR_HI + YAW_HI + PIT_LO + ROL_CE: f.CALIBRATE_MAG = true; break; 
         case THR_HI | YAW_LO | PIT_LO | ROL_CE: 
-          calibratingA = 512; 
+          calibratingA = 512;
           break;
         case THR_LO | YAW_LO | PIT_LO | ROL_CE: 
           calibratingG = 512; 
-          break;
-          //case THR_LO | YAW_HI | PIT_HI | ROL_CE: break; // Enter LCD config
+          break; 
         default: 
           break;
         } // switch
@@ -172,7 +180,12 @@ void doConfigUpdate(void) {
           break;
         case THR_HI | YAW_CE | PIT_CE | ROL_LO: 
           global_conf.accZero[ROLL] -= ACC_TRIM_STEP_SIZE; 
-          break;     
+          break;
+#if !defined(ISMULTICOPTER)
+        case THR_LO | YAW_HI | PIT_HI | ROL_CE:  
+          setServoTrims();
+          break;   
+#endif
         default: 
           updateglobal = false; 
           break;
@@ -201,8 +214,7 @@ void doConfigUpdate(void) {
   else 
     f.ANGLE_MODE = false;
 
-  f.ENABLE_ACRO_TRAINER = rcOptions[BOX_ACRO_TRAINER];
-
+#if defined(USE_MW)
   if ( rcOptions[BOX_HORIZON] ) {
     f.ANGLE_MODE = false;
     if (!f.HORIZON_MODE) {
@@ -212,6 +224,13 @@ void doConfigUpdate(void) {
   } 
   else 
     f.HORIZON_MODE = false;
+#endif
+
+#if !defined(ISMULTICOPTER)
+  f.BYPASS_MODE = rcOptions[BOX_BYPASS];
+#endif
+
+  f.EXP = rcOptions[BOX_EXP];
 
   if ((rcCommand[THROTTLE] > 1200) && rcOptions[BOX_ALT_HOLD] && (f.BARO_ACTIVE || f.SONAR_ACTIVE)) {
     if (!f.ALT_HOLD_MODE ) {
@@ -230,6 +249,11 @@ void doConfigUpdate(void) {
     f.OK_TO_ARM = true; 
 
 } // doConfigUpdate
+
+
+
+
+
 
 
 
