@@ -1,35 +1,4 @@
-/*
 
- MWLite_gke
- May 2013
- 
- MWLite_gke is free software: you can redistribute it and/or modify
- it under the terms of the GNU General Public License as published by
- the Free Software Foundation, either version 3 of the License, or
- any later version. see <http://www.gnu.org/licenses/>
- 
- MWLite_gke is distributed in the hope that it will be useful,but WITHOUT ANY 
- WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR 
- A PARTICULAR PURPOSE. 
- 
- See the GNU General Public License for more details.
- 
- Lite was based originally on MultiWiiCopter V2.2 by Alexandre Dubus
- www.multiwii.com, March  2013. The rewrite by Prof Greg Egan was renamed 
- so as not to confuse it with the original.
- 
- It preserves the parameter specification and GUI interface with parameters
- scaled to familiar values. 
- 
- Major changes include the control core which comes from UAVX with the 
- addition of MW modes.
- 
- Lite supports only Atmel 32u4 processors using an MPU6050 and optionally 
- BMP085 and MS5611 barometers and HMC5883 magnetometer with 4 motors, 
- no servos and 8KHz PWM for brushed DC motors.
- 
- */
- 
 // I2C general functions
 
 #define I2C_NACK 1
@@ -206,7 +175,7 @@ uint8_t i2cReadReg(uint8_t i2cx, uint8_t d, uint8_t addr) {
 #define Delay10TCYx(n)  delayMicroseconds(20*n)
 
 void softi2cPower(void) { // CAUTION - perhaps OK for one sensor
-#if defined(USE_5V_ON_MOSI) & !defined(STANDARD_RX)
+#if defined(USE_5V_ON_MOSI) && !defined(STANDARD_RX)
     DDRB|=(1<<I2C_5V_PIN);
     PORTB|=(1<<I2C_5V_PIN);
 #endif

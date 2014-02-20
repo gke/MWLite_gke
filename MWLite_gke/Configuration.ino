@@ -1,46 +1,23 @@
-/*
 
- MWLite_gke
- May 2013
- 
- MWLite_gke is free software: you can redistribute it and/or modify
- it under the terms of the GNU General Public License as published by
- the Free Software Foundation, either version 3 of the License, or
- any later version. see <http://www.gnu.org/licenses/>
- 
- MWLite_gke is distributed in the hope that it will be useful,but WITHOUT ANY 
- WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR 
- A PARTICULAR PURPOSE. 
- 
- See the GNU General Public License for more details.
- 
- Lite was based originally on MultiWiiCopter V2.2 by Alexandre Dubus
- www.multiwii.com, March  2013. The rewrite by Prof Greg Egan was renamed 
- so as not to confuse it with the original.
- 
- It preserves the parameter specification and GUI interface with parameters
- scaled to familiar values. 
- 
- Major changes include the control core which comes from UAVX with the 
- addition of MW modes.
- 
- Lite supports only Atmel 32u4 processors using an MPU6050 and optionally 
- BMP085 and MS5611 barometers and HMC5883 magnetometer with 4 motors, 
- no servos and 8KHz PWM for brushed DC motors.
- 
- */
 // Stick Programming - arming, accelerometer trim etc.
 
 
-void blinkLED(uint8_t t, uint8_t repeat) { 
+int16_t Threshold(int16_t v, int16_t t) {
+
+  return (abs(v) >= t ? v : 0);
+} // Threshold
+
+void blinkLED(uint8_t t, uint8_t repeat) {
+
   uint8_t r;
 
-  if ((rcCommand[THROTTLE] < MIN_THROTTLE) && !f.ARMED) 
+  if ((rcCommand[THROTTLE] < MIN_THR_US) && !f.ARMED) 
     for (r = 0; r < repeat; r++) {
       LED_BLUE_TOGGLE; 
       delay(t);
       LED_BLUE_TOGGLE;
     }
+
 } // blinkLED
 
 
@@ -74,21 +51,27 @@ void doArm(void) {
     if (f.MAG_ACTIVE && f.MAG_CALIBRATED && f.HEAD_HOLD_MODE) 
       holdHeading = angle[YAW];
     else 
-      YawAngle = 0.0f;
+      yawAngle = 0.0f;
     zeroIntegrals();
   }
+#if defined(USE_GPS) && !defined(SPEKTRUM)
   else
     blinkLED(200, 1);
+#endif
 
 } // doArm
 
 void doDisarm(void) {
-  if (f.ARMED)
+  if (f.ARMED) {
     LED_BLUE_OFF;
-  f.ARMED = false; 
+    f.ARMED = false; 
+#if defined(GPS_RESET_HOME_ON_DISARM)
+    f.GPS_FIX_HOME = false;
+#endif
+  }
 } // doDisarm
 
-void doStickArming(uint8_t rcSticks, bool stickArm) {
+void doStickArming(uint8_t rcSticks, boolean stickArm) {
 
   if ( conf.activate[BOX_ARM] == 0 ) {
     if (stickArm) {
@@ -114,7 +97,7 @@ void doStickArming(uint8_t rcSticks, bool stickArm) {
 void doConfigUpdate(void) {
   static uint8_t rcDelayCommand = 0; 
   static uint8_t rcSticks; 
-  bool updateglobal;
+  boolean updateglobal;
   uint8_t newSticks = 0;
   uint16_t auxState = 0;
   uint8_t i;
@@ -181,7 +164,7 @@ void doConfigUpdate(void) {
         case THR_HI | YAW_CE | PIT_CE | ROL_LO: 
           global_conf.accZero[ROLL] -= ACC_TRIM_STEP_SIZE; 
           break;
-#if !defined(ISMULTICOPTER)
+#if !defined(MULTICOPTER)
         case THR_LO | YAW_HI | PIT_HI | ROL_CE:  
           setServoTrims();
           break;   
@@ -226,29 +209,63 @@ void doConfigUpdate(void) {
     f.HORIZON_MODE = false;
 #endif
 
-#if !defined(ISMULTICOPTER)
+#if !defined(MULTICOPTER)
   f.BYPASS_MODE = rcOptions[BOX_BYPASS];
 #endif
 
   f.EXP = rcOptions[BOX_EXP];
 
-  if ((rcCommand[THROTTLE] > 1200) && rcOptions[BOX_ALT_HOLD] && (f.BARO_ACTIVE || f.SONAR_ACTIVE)) {
+#if defined(USE_ALT)
+  if ((rcCommand[THROTTLE] > 1200) && rcOptions[BOX_ALT_HOLD] && (f.BARO_ACTIVE || f.SONAR_ACTIVE || f.GPS_FIX_HOME)) {
     if (!f.ALT_HOLD_MODE ) {
       desiredAltitude = relativeAltitude;
       hoverThrottle = rcCommand[THROTTLE];
-      AltitudeIntE = 0;
-      ROC = 0;
-      altPID = 0;
+      AltitudeIntE = ROC = altPID = 0;
     }
     f.ALT_HOLD_MODE = true;
   } 
   else 
     f.ALT_HOLD_MODE = false;
+#endif
+
+#if defined(USE_GPS)
+
+  if (f.ARMED) {
+    if (rcOptions[BOX_GPS_HOME]) {
+      f.GPS_HOLD_MODE = false; 
+      f.GPS_HOME_MODE = f.GPS_FIX_HOME;
+    }
+    else
+      if (rcOptions[BOX_GPS_HOLD]) {
+        f.GPS_HOME_MODE = false;
+        if (!f.GPS_HOLD_MODE) {
+          newHold = true;
+          f.GPS_HOLD_MODE = true;
+        }
+      }
+      else 
+        f.GPS_HOME_MODE = f.GPS_HOLD_MODE = false;
+  }
+  else 
+    f.GPS_HOME_MODE = f.GPS_HOLD_MODE = false;
+
+#endif
 
   if (!rcOptions[BOX_ARM]) 
     f.OK_TO_ARM = true; 
 
 } // doConfigUpdate
+
+
+
+
+
+
+
+
+
+
+
 
 
 

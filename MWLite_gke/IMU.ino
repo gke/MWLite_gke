@@ -1,34 +1,3 @@
-/*
-
- MWLite_gke
- May 2013
- 
- MWLite_gke is free software: you can redistribute it and/or modify
- it under the terms of the GNU General Public License as published by
- the Free Software Foundation, either version 3 of the License, or
- any later version. see <http://www.gnu.org/licenses/>
- 
- MWLite_gke is distributed in the hope that it will be useful,but WITHOUT ANY 
- WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR 
- A PARTICULAR PURPOSE. 
- 
- See the GNU General Public License for more details.
- 
- Lite was based originally on MultiWiiCopter V2.2 by Alexandre Dubus
- www.multiwii.com, March  2013. The rewrite by Prof Greg Egan was renamed 
- so as not to confuse it with the original.
- 
- It preserves the parameter specification and GUI interface with parameters
- scaled to familiar values. 
- 
- Major changes include the control core which comes from UAVX with the 
- addition of MW modes.
- 
- Lite supports only Atmel 32u4 processors using an MPU6050 and optionally 
- BMP085 and MS5611 barometers and HMC5883 magnetometer with 4 motors, 
- no servos and 8KHz PWM for brushed DC motors.
- 
- */
 
 // **************************************************
 // Simplified IMU based on "Complementary Filter"
@@ -94,24 +63,6 @@ typedef union {
 } 
 t_int32_t_vector;
 
-int16_t _atan2(int32_t y, int32_t x){ // -1800:1800
-  float z;
-  int16_t a;
-
-  z = (float)y / x;
-  if ( abs(y) < abs(x) ){
-    a = 573 * z / (1.0f + 0.28f * sq(z));
-    if (x < 0) 
-      if (y < 0) a -= 1800;
-      else a += 1800;
-  } 
-  else {
-    a = 900 - 573 * z / (sq(z) + 0.28f);
-    if (y<0) a -= 1800;
-  }
-  return a;
-} // atan2
-
 float invSqrt (float x){ 
   union{  
     int32_t i;  
@@ -137,7 +88,7 @@ static t_int32_t_vector EstG32 = {
 static t_int32_t_vector EstM32;
 static float invG;
 static t_fp_vector EstM;
-  
+
 void getEstimatedAttitude(void){
   static uint32_t PrevuS;
   uint32_t TimeruS;
@@ -176,8 +127,8 @@ void getEstimatedAttitude(void){
   sqGX_sqGZ = sqGX + sqGZ;
   invmagXZ  = invSqrt(sqGX_sqGZ);
   invG = invSqrt(sqGX_sqGZ + sq(EstG32.V.Y));
-  angle[ROLL] = _atan2(EstG32.V.X , EstG32.V.Z);
-  angle[PITCH] = _atan2(EstG32.V.Y , invmagXZ * sqGX_sqGZ);
+  angle[ROLL] = atan2(EstG32.V.X , EstG32.V.Z);
+  angle[PITCH] = atan2(EstG32.V.Y , invmagXZ * sqGX_sqGZ);
 
   f.SMALL_ANGLE_25DEG = abs(angle[ROLL] < 250) && abs(angle[PITCH] < 250);
 
@@ -188,21 +139,24 @@ void getEstimatedAttitude(void){
     for (axis = ROLL; axis <= YAW; axis++) 
       EstM32.A[axis] = EstM.A[axis] = (EstM.A[axis] * GYR_CMPFM_FACTOR  + magADC[axis]) * INV_GYR_CMPFM_FACTOR;
 
-    angle[YAW] = _atan2(
+    angle[YAW] = atan2(
     EstM32.V.Z * EstG32.V.X - EstM32.V.X * EstG32.V.Z,
     EstM32.V.Y * invG * sqGX_sqGZ  - (EstM32.V.X * EstG32.V.X + EstM32.V.Z * EstG32.V.Z) * invG * EstG32.V.Y ); 
-    angle[YAW] = (angle[YAW] - MAG_DECLINATION * 10)/10;
+    angle[YAW] -= MAG_DECLINATION * 10;
   } 
   else 
 #endif // USE_MAG
-  {
-    // use direct integration
-    YawAngle += deltaGyroAngle[YAW]; 
-    Temp = YawAngle * (180.0/PI);
+  {    
+    yawAngle += deltaGyroAngle[YAW]; // use direct integration
+#if defined(USE_GPS) && !defined(MULTICOPTER) && !defined(USE_MAG)
+    if (f.GPS_FIX && (gpsSpeed > 400)) 
+      yawAngle = (yawAngle * GYR_CMPFM_FACTOR + (float)gpsGroundCourse * PI/1800.0) * INV_GYR_CMPFM_FACTOR;
+#endif  
+    Temp = yawAngle * (1800.0/PI);
     while (Temp < 0)
-      Temp += 360;
-    while (Temp >= 360)
-      Temp-= 360;
+      Temp += 3600;
+    while (Temp >= 3600)
+      Temp-= 3600;
     angle[YAW] = Temp;
   }
 
@@ -218,15 +172,13 @@ void getEstimatedAttitude(void){
 void calculateVerticalAcceleration(void) {
   static int16_t accZoffset;
 
-  //#if defined(USE_MW_ALT_CONTROL)
   // projection of ACC vector to global Z, with 1G subtracted
   // Math: accZ = A * G / |G| - 1G
-  //  accZ = (accData[ROLL] * EstG32.V.X + accData[PITCH] * EstG32.V.Y + accData[YAW] * EstG32.V.Z) * invG;
-  //#else
-  accZ = accData[YAW] - GRAVITY;
-  //#endif
+  accZ = (accData[ROLL] * EstG32.V.X + accData[PITCH] * EstG32.V.Y + accData[YAW] * EstG32.V.Z) * invG - GRAVITY;
+  // accZ = accData[YAW] - GRAVITY;
 
-  if (f.SMALL_ANGLE_25DEG) {    
+  if (f.SMALL_ANGLE_25DEG) {
+    accZoffset = 0;    
     if (!f.ARMED) {
       accZoffset -= accZoffset >> 3;
       accZoffset += accZ;
@@ -236,7 +188,21 @@ void calculateVerticalAcceleration(void) {
   } 
   else
     accZ = 0;
+
 } // calculateVerticalAcceleration
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 

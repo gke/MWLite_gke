@@ -1,35 +1,4 @@
 
-/*
-
- MWLite_gke
- May 2013
- 
- MWLite_gke is free software: you can redistribute it and/or modify
- it under the terms of the GNU General Public License as published by
- the Free Software Foundation, either version 3 of the License, or
- any later version. see <http://www.gnu.org/licenses/>
- 
- MWLite_gke is distributed in the hope that it will be useful,but WITHOUT ANY 
- WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR 
- A PARTICULAR PURPOSE. 
- 
- See the GNU General Public License for more details.
- 
- Lite was based originally on MultiWiiCopter V2.2 by Alexandre Dubus
- www.multiwii.com, March  2013. The rewrite by Prof Greg Egan was renamed 
- so as not to confuse it with the original.
- 
- It preserves the parameter specification and GUI interface with parameters
- scaled to familiar values. 
- 
- Major changes include the control core which comes from UAVX with the 
- addition of MW modes.
- 
- Lite supports only Atmel 32u4 processors using an MPU6050 and optionally 
- BMP085 and MS5611 barometers and HMC5883 magnetometer with 4 motors, 
- no servos and 8KHz PWM for brushed DC motors.
- 
- */
 
 enum MPU6050LPFs {
   MPU6050_LPF_256HZ, MPU6050_LPF_188HZ, MPU6050_LPF_98HZ, MPU6050_LPF_42HZ, MPU6050_LPF_20HZ, MPU6050_LPF_10HZ, MPU6050_LPF_5HZ};
@@ -429,7 +398,7 @@ void ms5611Init(void) {
     ms5611_ctx.deadline = micros() + MS5611_TIME_US; 
   }
   else
-    relativeAltitude = ROC = altPID = 0; 
+    baroAltitude = ROC = altPID = 0; 
 
 } // ms5611Init
 
@@ -513,42 +482,57 @@ boolean ms5611Update(void) {
 #define MAXBOTIX_TIME_US 25000 // can go faster but PID tuning will be different
 #define MAXBOTIX_CAL_CM 1 
 
-boolean rangefinderUpdate(void) {
-  static uint32_t nextUpdateuS = micros();
-  boolean r = false;
+void rangefinderUpdate(void) {
 
-  if (f.SONAR_ACTIVE && slotFree) {
-    NowuS = micros();
-    if (NowuS >= nextUpdateuS) {
-      nextUpdateuS = NowuS + MAXBOTIX_TIME_US;
-      relativeAltitude = analogRead(SONAR_PIN) * MAXBOTIX_CAL_CM; 
-      r = true;
-    }
-  }
+  rangefinderAltitude = analogRead(SONAR_PIN) * MAXBOTIX_CAL_CM; 
 
-  return(r);
 } // rangefinderUpdate
 
 void rangefinderInit(void) {
-  f.SONAR_ACTIVE = true;
+  rangefinderAltitude = 0;
+  f.SONAR_ACTIVE = false;
 } // rangefinderInit
 
 //______________________________________________________________________________________________
 
 // Altitude Common
 
-boolean updateAltitude(void) {
+#define ALT_RF_ENABLE_CM 300 // altitude below which the rangefinder is selected as the altitude source
+#define ALT_RF_DISABLE_CM 400 // altitude above which the rangefinder is deselected as the altitude source
 
-#if defined(USE_BOSCH_BARO)
-  return(bmp085Update());
-#elif defined(USE_MS_BARO)
-  return(ms5611Update());
-#elif defined(USE_SONAR)
-  return(rangefinderUpdate());
-#else
-  return(false);
+boolean updateAltitude(void) {
+  boolean r = false;
+
+#if defined(BMP085) || defined(MS5611)
+#if defined(BMP085)
+  r = bmp085Update();
+#elif defined(MS5611)
+  r = ms5611Update();
 #endif
-} // updateBaro
+  if (r) 
+    relativeAltitude = baroAltitude;
+#elif defined(USE_GPS)
+  r = f.GPS_FIX_HOME;
+  if (r)
+    relativeAltitude = gpsAltitude - gpsHomeAltitude; 
+#endif
+
+#if defined(MAXBOTIX)
+  if (r) {
+    rangefinderUpdate(); // could sample faster
+    if ((rangefinderAltitude < ALT_RF_ENABLE_CM)
+      && !f.SONAR_ACTIVE)
+      f.SONAR_ACTIVE = true;
+    else if ((rangefinderAltitude > ALT_RF_DISABLE_CM)
+      && f.SONAR_ACTIVE)
+      f.SONAR_ACTIVE = false;
+    if (f.SONAR_ACTIVE)
+      relativeAltitude = rangefinderAltitude;
+  }
+#endif
+
+  return r;
+} // updateAltitude
 
 
 int32_t CalculateDensityAltitude(float p) {
@@ -581,7 +565,7 @@ void conditionBaro(void) {
     calibratingB--;
   } 
 
-  relativeAltitude = (int16_t)(densityAltitude - densityGroundAltitude);
+  baroAltitude = (int16_t)(densityAltitude - densityGroundAltitude);
 
 
 #if defined(DEBUG_BARO)
@@ -620,7 +604,7 @@ static boolean magInit = false;
 #define MAG_DATA_REGISTER 0x03
 
 boolean hmc5883Active(void) {
-   return (i2cReadReg(I2CMAG, MAG_ADDRESS, 0x0a) == 'H');
+  return (i2cReadReg(I2CMAG, MAG_ADDRESS, 0x0a) == 'H');
 } //  hmc5883Active
 
 void hmc5883Init(void) {
@@ -668,7 +652,7 @@ void hmc5883Init(void) {
     i2cWriteReg(I2CMAG, MAG_ADDRESS ,HMC5883_R_CONFA ,0x70 ); //Configuration Register A  -- 0 11 100 00  num samples: 8 ; output rate: 15Hz ; normal measurement mode
     i2cWriteReg(I2CMAG, MAG_ADDRESS ,HMC5883_R_CONFB ,0x20 ); //Configuration Register B  -- 001 00000    configuration gain 1.3Ga
     i2cWriteReg(I2CMAG, MAG_ADDRESS ,HMC5883_R_MODE  ,0x00 ); //Mode register             -- 000000 00    continuous Conversion Mode
-    
+
     delay(MAG_UPDATE_MS);
 
     magInit = true;
@@ -746,7 +730,7 @@ boolean hmc5883Update(void) { // 530uS
 } // hmc5883Update
 
 boolean updateMagnetometer(void) {
-#if defined(USE_BOSCH_MAG)
+#if defined(HMC5883L)
   return(hmc5883Update());
 #else
   return(false);
@@ -873,17 +857,27 @@ void initSensors(void) {
   i2cInit();
   delay(200);
   initMPU6050();
-#if defined(USE_BOSCH_BARO)
+#if defined(BMP085)
   bmp085Init();
-#elif defined(USE_MS_BARO)
+#elif defined(MS5611)
   ms5611Init();
-#elif defined(USE_SONAR)  
+#endif
+#if defined(MAXBOTIX)  
   rangefinderInit();
 #endif
-#if defined(USE_BOSCH_MAG)
+#if defined(HMC5883L)
   hmc5883Init();
 #endif
 } // initSensors
+
+
+
+
+
+
+
+
+
 
 
 

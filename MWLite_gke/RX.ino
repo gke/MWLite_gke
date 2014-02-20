@@ -1,37 +1,5 @@
-/*
-
- MWLite_gke
- May 2013
- 
- MWLite_gke is free software: you can redistribute it and/or modify
- it under the terms of the GNU General Public License as published by
- the Free Software Foundation, either version 3 of the License, or
- any later version. see <http://www.gnu.org/licenses/>
- 
- MWLite_gke is distributed in the hope that it will be useful,but WITHOUT ANY 
- WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR 
- A PARTICULAR PURPOSE. 
- 
- See the GNU General Public License for more details.
- 
- Lite was based originally on MultiWiiCopter V2.2 by Alexandre Dubus
- www.multiwii.com, March  2013. The rewrite by Prof Greg Egan was renamed 
- so as not to confuse it with the original.
- 
- It preserves the parameter specification and GUI interface with parameters
- scaled to familiar values. 
- 
- Major changes include the control core which comes from UAVX with the 
- addition of MW modes.
- 
- Lite supports only Atmel 32u4 processors using an MPU6050 and optionally 
- BMP085 and MS5611 barometers and HMC5883 magnetometer with 4 motors, 
- no servos and 8KHz PWM for brushed DC motors.
- 
- */
 
 // Rx
-
 
 #define RC_GOOD_BUCKET_MAX 20
 #define RC_GOOD_RATIO 4
@@ -53,17 +21,14 @@ volatile uint16_t rcValue[RC_CHANS] = {
   1502, 1502, 1502, 1502, 1502, 1502, 1502, 1502, 1502, 1502, 1502, 1502, 1502, 1502, 1502, 1502, 1502, 1502}; // interval [1000;2000]
 #elif defined(SPEKTRUM)
 
-volatile uint8_t  spekFrameFlags;
-volatile uint32_t spekTimeLast;
+volatile uint8_t  spekFrameSeen;
+volatile uint32_t spekLastUpdateuS;
 
 volatile uint16_t rcValue[RC_CHANS] = {
   1502, 1502, 1502, 1502, 1502, 1502, 1502, 1502, 1502, 1502, 1502, 1502}; // interval [1000;2000]
 #elif defined(SERIAL_SUM_PPM)
 volatile uint16_t rcValue[RC_CHANS]= {
-  1502, 1502, 1502, 1502, 1502, 1502, 1502}; // interval [1000;2000]
-#elif defined(FLYSKY)
-volatile uint16_t rcValue[RC_CHANS]= {
-  1500, 1500, 1500, 1500, 1500, 1500, 1500, 1500}; // interval [1000;2000]  
+  1502, 1502, 1502, 1502, 1502, 1502, 1502}; // interval [1000;2000] 
 #else
 volatile uint16_t rcValue[RC_CHANS] = {
   1502, 1502, 1502, 1502, 1502, 1502, 1502, 1502}; // interval [1000;2000]
@@ -79,10 +44,7 @@ static uint8_t rcChannel[RC_CHANS] = {
 static uint16_t sbusIndex=0;
 #elif defined(SPEKTRUM)
 static uint8_t rcChannel[RC_CHANS] = {
-  PITCH,YAW,THROTTLE,ROLL,AUX1,AUX2,AUX3,AUX4,8,9,10,11};
-#elif defined(FLYSKY)
-static uint8_t rcChannel[RC_CHANS] = {
-  PITCH,YAW,THROTTLE,ROLL,AUX1,AUX2,AUX3,AUX4}; 
+  PITCH,YAW,THROTTLE,ROLL,AUX1,AUX2,AUX3,AUX4,8,9,10,11}; 
 #else // Standard Channel order
 static uint8_t rcChannel[RC_CHANS]  = {
   ROLLPIN, PITCHPIN, YAWPIN, THROTTLEPIN, AUX1PIN,AUX2PIN,AUX3PIN,AUX4PIN};
@@ -129,11 +91,9 @@ void configureReceiver(void) {
 #endif
 
 #if defined (SPEKTRUM)
-  SerialOpen(SPEK_SERIAL_PORT,115200);
+  serialOpen(SPEK_SERIAL_PORT,115200);
 #elif defined(SBUS)
-  SerialOpen(1,100000);
-#elif defined(FLYSKY)
-  initFlySky();
+  serialOpen(1,100000);
 #endif
 
 } // configureReceiver
@@ -195,7 +155,7 @@ ISR(RX_PC_INTERRUPT) { //this ISR is common to every receiver channel, it is cal
 
   mask = pin ^ PCintLast;   // doing a ^ between the current interrupt and the last one indicates which pin changed
   NowuS = micros(); 
-  sei();                    // re enable other interrupts at this point, the rest of this interrupt is not so time critical 
+  interrupts();                    // re enable other interrupts at this point, the rest of this interrupt is not so time critical 
   // and can be interrupted safely
   PCintLast = pin;          // we memorize the current state of all PINs [D0-D7]
 
@@ -268,16 +228,12 @@ ISR(INT2_vect){
 #if defined(SERIAL_SUM_PPM)
 
 ISR(INT6_vect){
-  rxInt();
-} // INT6_vect
-
-void rxInt(void) {
   uint16_t NowuS, Width;
   static uint16_t PrevuS = 0;
   static uint8_t chan = 0;
 
   NowuS = micros();
-  sei();
+  interrupts();
   Width = NowuS - PrevuS;
   PrevuS = NowuS;
   if( Width > 3000) { 
@@ -294,7 +250,8 @@ void rxInt(void) {
 
       chan++;
     }
-} // rxInt
+} // INT6_vect
+
 #endif // SERIAL_SUM_PPM
 
 //_____________________________________________________________________________________________
@@ -354,26 +311,25 @@ void readSpektrum(void) {
   int16_t Temp;
   uint8_t i, b, bh, bl, spekChannel;
 
-  if ((!f.ARMED) && ( SerialPeek(SPEK_SERIAL_PORT) == '$')) {
-    while (SerialAvailable(SPEK_SERIAL_PORT)) {
+  if ((!f.ARMED) && ( serialPeek(SPEK_SERIAL_PORT) == '$')) {
+    while (serialAvailable(SPEK_SERIAL_PORT)) {
       serialCom();
       delay (10);
     }
     return;
   } //End of: Is it the GUI?
 
-  while (SerialAvailable(SPEK_SERIAL_PORT) > SPEK_FRAME_SIZE) // More than a frame?  More bytes implies we weren't called for multiple frame times.  
-    // We do not want to process 'old' frames in the buffer.
+  while (serialAvailable(SPEK_SERIAL_PORT) > SPEK_FRAME_SIZE)
     for (i = 0; i < SPEK_FRAME_SIZE; i++) 
-      SerialRead(SPEK_SERIAL_PORT); //Toss one full frame of bytes.
+      serialRead(SPEK_SERIAL_PORT); //discard stale frame and use latest
 
-  if (spekFrameFlags == 0x01) //The interrupt handler saw at least one valid frame start since we were last here. 
-    if (SerialAvailable(SPEK_SERIAL_PORT) == SPEK_FRAME_SIZE) {  //A complete frame? If not, we'll catch it next time we are called. 
-      SerialRead(SPEK_SERIAL_PORT); 
-      SerialRead(SPEK_SERIAL_PORT); // Eat the header bytes 
+  if (spekFrameSeen) 
+    if (serialAvailable(SPEK_SERIAL_PORT) == SPEK_FRAME_SIZE) {  
+      serialRead(SPEK_SERIAL_PORT); 
+      serialRead(SPEK_SERIAL_PORT); // discard header
       for (b = 2; b < SPEK_FRAME_SIZE; b += 2) {
-        bh = SerialRead(SPEK_SERIAL_PORT);
-        bl = SerialRead(SPEK_SERIAL_PORT);
+        bh = serialRead(SPEK_SERIAL_PORT);
+        bl = serialRead(SPEK_SERIAL_PORT);
         spekChannel = 0x0F & (bh >> SPEK_CHAN_SHIFT);
         if (spekChannel < RC_CHANS) {
           Temp =  ((((uint16_t)(bh & SPEK_CHAN_MASK) << 8) + bl) SPEK_DATA_SHIFT);
@@ -391,15 +347,13 @@ void readSpektrum(void) {
         }  
       }
       failsafeUpdate();
-      spekFrameFlags = 0x00;
+      spekFrameSeen = false;
     } 
-    else { //Start flag is on, but not enough bytes means there is an incomplete frame in buffer.  
-      // This could be OK, if we happened to be called in the middle of a frame.  Or not, if it has 
-      // been a while since the start flag was set.
-      spekInterval = micros() - spekTimeLast;
+    else { // check frame timeout
+      spekInterval = micros() - spekLastUpdateuS;
       if (spekInterval > 2500) { 
         rcGlitches++;
-        spekFrameFlags = 0; 
+        spekFrameSeen = false; 
       } 
     }
 } // readSpektrum
@@ -459,373 +413,23 @@ void checkSpektrumBinding(void) {
 
 #endif // SPEKTRUM
 
-
-//_____________________________________________________________________________________________
-
-// FlySky using XL7105 Transceiver
-
-#if defined(FLYSKY)
-
-NOT COMMISSIONED
-
-// **********************************************************
-// ******************   Flysky Rx Code   *******************
-//               by midelic on RCgroups.com 
-//   Thanks to PhracturedBlue,ThierryRC,Dave1993,and the team
-//    of OpenLRS project.
-//    Many thanks to Philip Cowzer(SadSack)for testing
-//   Rewrite by Prof Greg Egan 2013
-// **********************************************************
-// Date:before my bet with Dave1993 expired(April-July 2013). 
-// Hardware:mega328(Promini)+XL7105+mpu6050+MOSFET(brushed)
-// Project Forum : Not yet dedicated project forum
-// Google Code Page:Not yet,waiting for somebody to make one
-// Info and questions at:
-// http://www.rcgroups.com/forums/showthread.php?t=1710948
-// **********************************************************
-
-static const uint8_t XL7105Regs[] = {
-  0xff, 0x42, 0x00, 0x14, 0x00, 0xff, 0xff ,0x00, 0x00, 0x00, 0x00, 0x01, 0x21, 0x05, 0x00, 0x50,
-  0x9e, 0x4b, 0x00, 0x02, 0x16, 0x2b, 0x12, 0x00, 0x62, 0x80, 0x80, 0x00, 0x0a, 0x32, 0xc3, 0x0f,
-  0x13, 0xc3, 0x00, 0xff, 0x00, 0x00, 0x3b, 0x00, 0x17, 0x47, 0x80, 0x03, 0x01, 0x45, 0x18, 0x00,
-  0x01, 0x0f, 0xff,
-};
-static const uint8_t flyskyChannels[16][16] = {
-  {
-    0x0a, 0x5a, 0x14, 0x64, 0x1e, 0x6e, 0x28, 0x78, 0x32, 0x82, 0x3c, 0x8c, 0x46, 0x96, 0x50, 0xa0                                                }
-  ,
-  {
-    0xa0, 0x50, 0x96, 0x46, 0x8c, 0x3c, 0x82, 0x32, 0x78, 0x28, 0x6e, 0x1e, 0x64, 0x14, 0x5a, 0x0a                                                }
-  ,
-  {
-    0x0a, 0x5a, 0x50, 0xa0, 0x14, 0x64, 0x46, 0x96, 0x1e, 0x6e, 0x3c, 0x8c, 0x28, 0x78, 0x32, 0x82                                                }
-  ,
-  {
-    0x82, 0x32, 0x78, 0x28, 0x8c, 0x3c, 0x6e, 0x1e, 0x96, 0x46, 0x64, 0x14, 0xa0, 0x50, 0x5a, 0x0a                                                }
-  ,
-  {
-    0x28, 0x78, 0x0a, 0x5a, 0x50, 0xa0, 0x14, 0x64, 0x1e, 0x6e, 0x3c, 0x8c, 0x32, 0x82, 0x46, 0x96                                                }
-  ,
-  {
-    0x96, 0x46, 0x82, 0x32, 0x8c, 0x3c, 0x6e, 0x1e, 0x64, 0x14, 0xa0, 0x50, 0x5a, 0x0a, 0x78, 0x28                                                }
-  ,
-  {
-    0x50, 0xa0, 0x28, 0x78, 0x0a, 0x5a, 0x1e, 0x6e, 0x3c, 0x8c, 0x32, 0x82, 0x46, 0x96, 0x14, 0x64                                                }
-  ,
-  {
-    0x64, 0x14, 0x96, 0x46, 0x82, 0x32, 0x8c, 0x3c, 0x6e, 0x1e, 0x5a, 0x0a, 0x78, 0x28, 0xa0, 0x50                                                }
-  ,
-  {
-    0x50, 0xa0, 0x46, 0x96, 0x3c, 0x8c, 0x28, 0x78, 0x0a, 0x5a, 0x32, 0x82, 0x1e, 0x6e, 0x14, 0x64                                                }
-  ,
-  {
-    0x64, 0x14, 0x6e, 0x1e, 0x82, 0x32, 0x5a, 0x0a, 0x78, 0x28, 0x8c, 0x3c, 0x96, 0x46, 0xa0, 0x50                                                }
-  ,
-  {
-    0x46, 0x96, 0x3c, 0x8c, 0x50, 0xa0, 0x28, 0x78, 0x0a, 0x5a, 0x1e, 0x6e, 0x32, 0x82, 0x14, 0x64                                                }
-  ,
-  {
-    0x64, 0x14, 0x82, 0x32, 0x6e, 0x1e, 0x5a, 0x0a, 0x78, 0x28, 0xa0, 0x50, 0x8c, 0x3c, 0x96, 0x46                                                }
-  ,
-  {
-    0x46, 0x96, 0x0a, 0x5a, 0x3c, 0x8c, 0x14, 0x64, 0x50, 0xa0, 0x28, 0x78, 0x1e, 0x6e, 0x32, 0x82                                                }
-  ,
-  {
-    0x82, 0x32, 0x6e, 0x1e, 0x78, 0x28, 0xa0, 0x50, 0x64, 0x14, 0x8c, 0x3c, 0x5a, 0x0a, 0x96, 0x46                                                }
-  ,
-  {
-    0x46, 0x96, 0x0a, 0x5a, 0x50, 0xa0, 0x3c, 0x8c, 0x28, 0x78, 0x1e, 0x6e, 0x32, 0x82, 0x14, 0x64                                                }
-  ,
-  {
-    0x64, 0x14, 0x82, 0x32, 0x6e, 0x1e, 0x78, 0x28, 0x8c, 0x3c, 0xa0, 0x50, 0x5a, 0x0a, 0x96, 0x46                                                }
-  ,
-};
-
-#define  GIO_HI PORTD |=0x40//D6 
-#define  GIO_INP_HI (PIND & 0x40) == 0x40 //D6 input
-#define  GIO_INP_LO (PIND & 0x40) == 0x00 //D6
-
-#define NOP() __asm__ __volatile__("nop")
-
-static uint32_t ID;
-static uint8_t txID[4];
-static uint8_t chanrow;
-static uint8_t chancol;
-static uint8_t chanoffset;
-static uint8_t channel;
-static word counter1=512;
-static uint8_t currID[4];
-static uint8_t XL7105Packet[21];
-static uint16_t Width;
-
-void initFlySky(void){
-  uint8_t i;
-
-  _spiInit(); 
-
-  delay(10); // XL7105 wakeup
-  resetXL7105();
-  writeXL7105ID(0x5475c52a); 
-
-  //readXL7105ID();
-  //Serial.print(currID[0],HEX);
-  //Serial.print(currID[1],HEX);
-  //Serial.print(currID[2],HEX);
-  //Serial.print(currID[3],HEX);
-
-  for (i = 0; i < 0x33; i++)
-    if(XL7105Regs[i] != 0xff)
-      _spiWrite(i, XL7105Regs[i]);
-
-  _spiWrite(0x02, 0x01);
-  while(_spiRead(0x02)) 
-    if(_spiRead(0x22) & 0x10){//do nothing
-    }
-  _spiWrite(0x24,0x13);
-  _spiWrite(0x26,0x3b);
-  _spiWrite(0x0f,0x00); // channel 0
-  _spiWrite(0x02,0x02);
-  while(_spiRead(0x02))
-    if(_spiRead(0x25)&0x08){ // do nothing
-    }
-
-  _spiWrite(0x0F,0xa0);
-  _spiWrite(0x02,0x02);
-  while(_spiRead(0x02))
-    if(_spiRead(0x25) & 0x08){//do nothing
-    }
-  _spiWrite(0x25,0x08);
-
-  bindFlysky();
-  //id=(XL7105Packet[1] | ((uint32_t)XL7105Packet[2]<<8) | ((uint32_t)XL7105Packet[3]<<16) | ((uint32_t)XL7105Packet[4]<<24));
-  ID = (txID[0] | ((uint32_t)txID[1]<<8) | ((uint32_t)txID[2]<<16) | ((uint32_t)txID[3]<<24));
-  chanrow = ID & 15;
-  chanoffset = (ID & 0xff) >> 4;
-  chancol = 0;
-} // initFlySky
-
-boolean syncXL7105(void) { // FlySky header match  
-  return (XL7105Packet[1]==txID[0]) && (XL7105Packet[2]==txID[1])&& (XL7105Packet[3]==txID[2])&& (XL7105Packet[4]==txID[3]);  
-} // syncXL7105
-
-void readFlySky(void) {
-  uint32_t NowuS;
-  uint8_t v;
-  uint8_t i;
-
-  channel=flyskyChannels[chanrow][chancol]-1-chanoffset;
-  _spiStrobe(0xa0);
-  _spiStrobe(0xf0);
-  _spiWrite(0x0f,channel);
-  _spiStrobe(0xc0); 
-  chancol = (chancol + 1) & 15;
-
-  NowuS = micros();
-
-  if((micros() - NowuS) > 2250){
-    LED_BLUE_OFF;
-    chancol = (chancol + 1) & 15;
-    channel=flyskyChannels[chanrow][chancol]-1-chanoffset;
-  }
-  else
-    if (GIO_INP_HI) {
-      if (_spiRead(0x00) & 0b01100000) { // CRF & CRC
-
-        readXL7105Packet();
-
-        if (syncXL7105()) {
-          LED_BLUE_ON;
-          for (i = 0; i < RC_CHANS; i++){
-            Width=((XL7105Packet[6 + (i<<1)] << 8) + XL7105Packet[5 + (i<<1)]);
-            if (WidthOK(Width))
-              rcValue[i] = Width;
-          } 	  
-        }
-      }
-    }
-} // readFlySky
-
-void bindFlysky(void) {
-  uint8_t v;
-
-  _spiStrobe(0xa0);
-  _spiStrobe(0xf0);
-  _spiWrite(0x0f,0x00); // listen on channel 0
-  _spiStrobe(0xc0);
-
-  while(counter1){ // 5 sec.
-    delay(10);
-    if (bitRead(counter1, 2) == 1)
-      LED_BLUE_ON;
-    if(bitRead(counter1, 2) == 0)
-      LED_BLUE_OFF;
-
-    if (GIO_INP_HI){
-      if (_spiRead(0x00) & 0b01100000) { // CRF & CRC
-
-        readXL7105Packet();
-
-        txID[0] = XL7105Packet[1];
-        txID[1] = XL7105Packet[2];
-        txID[2] = XL7105Packet[3];
-        txID[3] = XL7105Packet[4];
-      }
-      else
-        bindFlysky();
-      break;
-    }
-    else
-      counter1--;
-  }
-  LED_BLUE_OFF;
-} // bindFlySky
-
-void readXL7105ID(void){
-  _spiReadBytes(0x46, currID, 4);  
-} // readXL7105ID
-
-void readXL7105Packet(void) {
-  _spiReadBytes(0x45, XL7105Packet, 21);
-} // ReadPacket
-
-void resetXL7105(void) {
-  _spiWrite(0x00,0x00); 
-} // resetXL7105
-
-// SPI routines
-
-//Dave/mwii pins configuration
-#define GIO_pin 6 // GIO-D6
-#define SDI_pin 5 // SDIO-D5 
-#define SCLK_pin 4 // SCK-D4
-#define CS_pin 2 // CS-D2
-//------------------
-#define  CS_HI PORTD |= 0x04 //D2
-#define  CS_LO PORTD &= 0xFB //D2
-#define  SCK_HI PORTD |= 0x10//D4
-#define  SCK_LO PORTD &= 0xEF//D4
-#define  SDI_HI PORTD |= 0x20 //D5
-#define  SDI_LO PORTD &= 0xDF //D5
-
-#define  SDI_INP (PIND & 0x20) == 0x20 //D5
-
-void writeXL7105ID(uint32_t ID) {
-  CS_LO;
-  _spiWriteByte(0x06);
-  _spiWriteByte((ID >> 24) & 0xff); 
-  _spiWriteByte((ID >> 16) & 0xff);
-  _spiWriteByte((ID >> 8) & 0xff);
-  _spiWriteByte((ID >> 0) & 0xff);
-  CS_HI;
-} // writeXL7105ID
-
-void _spiReadBytes(uint8_t a, uint8_t * v, uint8_t l) {
-  uint8_t i;
-
-  CS_LO;
-  _spiWriteByte(a);
-  for (i = 0; i < l; i++) 
-    v[i] = _spiReadByte();
-  CS_HI;
-} // _spiReadBytes
-
-void _spiWriteByte(uint8_t v) {  
-  uint8_t n=8; 
-
-  SCK_LO;
-  SDI_LO;
-  while(n--) {
-    if(v & 0x80)
-      SDI_HI;
-    else 
-      SDI_LO;
-    SCK_HI;
-    NOP();
-    SCK_LO;
-    v <<= 1;
-  }
-  SDI_HI;
-} // _spiWriteByte
-
-void _spiWrite(uint8_t a, uint8_t v) {
-  CS_LO;
-  _spiWriteByte(a); 
-  NOP();
-  _spiWriteByte(v);  
-  CS_HI;
-} // _spiWrite
-
-uint8_t _spiReadByte(void) {
-  uint8_t r;
-  uint8_t i;
-  r=0;
-  pinMode(SDI_pin,INPUT); 
-  //SDI_HI;
-  for(i = 0; i < 8; i++) {                    
-    if(SDI_INP)  ///if SDIO = 1 
-      r=(r<<1)|0x01;
-    else
-      r <<= 1;
-    SCK_HI;
-    NOP();
-    SCK_LO;
-    NOP();
-  }
-  pinMode(SDI_pin, OUTPUT);
-  return (r);
-} // _spiRead
-
-uint8_t _spiRead(uint8_t a) { 
-  uint8_t r;
-
-  CS_LO;
-  a |=0x40;
-  _spiWriteByte(a);
-  r = _spiReadByte();  
-  CS_HI;
-  return(r); 
-} // _spiRead
-
-void _spiStrobe(uint8_t a) {
-  CS_LO;
-  _spiWriteByte(a);
-  CS_HI;
-} // _spiStrobe
-
-void _spiInit(void) {
-
-  pinMode(GIO_pin, INPUT_PULLUP);
-  pinMode(SDI_pin, OUTPUT);
-  pinMode(SCLK_pin, OUTPUT);
-  pinMode(CS_pin, OUTPUT);
-  CS_HI; 
-  SDI_HI; 
-  SCK_LO; 
-
-} // _spiInit
-
-#endif // FLYSKY
-
-
 //_____________________________________________________________________________________________
 
 // General 
 
 uint16_t readRawRC(uint8_t chan) {
-  uint16_t data;
-#if defined(SPEKTRUM) || defined(FLYSKYRC)
+  uint16_t v;
+#if defined(SPEKTRUM)
   readSpektrum();
   if (chan < RC_CHANS)
-    data = rcValue[rcChannel[chan]];
-  else data = MIDRC;
+    v = rcValue[rcChannel[chan]];
+  else v = MID_RC_US;
 #else
-  uint8_t oldSREG;
-  oldSREG = SREG; 
-  cli(); // disable interrupts
-  data = rcValue[rcChannel[chan]]; // Let's copy the data Atomically
-  SREG = oldSREG; // restore interrupt state
+  noInterrupts(); 
+  v = rcValue[rcChannel[chan]]; 
+  interrupts();
 #endif
-  return data; // We return the value correctly copied when the IRQ's where disabled
+  return v; 
 } // readRawRC
 
 void getRCInput(void) {
@@ -862,8 +466,6 @@ bool inline newRCValues(void) {
   readSpektrum();   
 #elif defined(SBUS)
   readSBus();
-#elif defined(FLYSKY)
-  readFlySky();
 #endif
 
   rcIntervaluS = micros() - rcLastUpdateuS;
@@ -888,18 +490,18 @@ bool inline newRCValues(void) {
 
 #if defined(FAILSAFE)
     f.ANGLE_MODE = true;  
-#if defined(USE_MW_CONTROL)
+#if defined(USE_MW)
     f.HORIZON_MODE = false;
 #endif
     rcCommand[ROLL] = rcCommand[PITCH] = 0;
 
     if (rcIntervaluS > (FAILSAFE_OFF_DELAY * 100000)) {
-      rcCommand[THROTTLE] = MIN_COMMAND;
+      rcCommand[THROTTLE] = MIN_RC_US;
       f.OK_TO_ARM = false;
       doDisarm();
     } 
     else
-      rcCommand[THROTTLE] = FAILSAFE_THROTTLE;   
+      rcCommand[THROTTLE] = FAILSAFE_THR_US;   
 #endif
   }
 

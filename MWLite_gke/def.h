@@ -1,65 +1,73 @@
-/*
 
- MWLite_gke
- May 2013
- 
- MWLite_gke is free software: you can redistribute it and/or modify
- it under the terms of the GNU General Public License as published by
- the Free Software Foundation, either version 3 of the License, or
- any later version. see <http://www.gnu.org/licenses/>
- 
- MWLite_gke is distributed in the hope that it will be useful,but WITHOUT ANY 
- WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR 
- A PARTICULAR PURPOSE. 
- 
- See the GNU General Public License for more details.
- 
- Lite was based originally on MultiWiiCopter V2.2 by Alexandre Dubus
- www.multiwii.com, March  2013. The rewrite by Prof Greg Egan was renamed 
- so as not to confuse it with the original.
- 
- It preserves the parameter specification and GUI interface with parameters
- scaled to familiar values. 
- 
- Major changes include the control core which comes from UAVX with the 
- addition of MW modes.
- 
- Lite supports only Atmel 32u4 processors using an MPU6050 and optionally 
- BMP085 and MS5611 barometers and HMC5883 magnetometer with 4 motors at 
- 8KHz PWM for brushed DC motors and up to 5 serovs for airplanes or flying wings.
- 
- */
-
-// Macros
 
 #define Limit1(i,l) (((i) < -(l)) ? -(l) : (((i) > (l)) ? (l) : (i)))
 #define Sign(n) ((n<0) ? -1 : 1)
-#define PercentToStick(n) (n*5)
-
-#define PWM_MIN 1020 //  [1020;2000]
-#define PWM_MAX 2000 //  [1020;2000]
-
-#define MAX_BANK_ANGLE 500 // 0.1 Degrees - don't change
-
-#ifdef MOTOR_STOP
-#define EFF_MIN_COMMAND MIN_COMMAND
-#else
-#define EFF_MIN_COMMAND conf.minthrottle
-#endif
 
 #if (defined(USE_MW_ALEXK_CONTROL) || defined(USE_MW_LEGACY_CONTROL) || defined(USE_MW_2_3_CONTROL) )
 #define USE_MW
+#define STICK_TO_ANGLE 2  // [0:500] -> [0:100] degrees
+#else
+#define STICK_TO_ANGLE 1  // [0:500] -> [0:50] degrees
 #endif
 
-#if defined(USE_RELAY_TUNE)
-#define USE_TUNING
+#define MAX_BANK_ANGLE 500 // 0.1 Degrees - don't change
+
+#if !defined(MAX_NAV_BANK_ANGLE)
+#define MAX_NAV_BANK_ANGLE 150
 #endif
 
-#if defined(USE_BOSCH_MAG)
-#define USE_MAG
+#define MIN_RC_US 1000
+#define MID_RC_US 1500
+#define MAX_RC_US 2000
+
+#if !defined(MAX_THR_US)
+#define MAX_THR_US MAX_RC_US
 #endif
+
+#if !defined(MIN_THR_US)
+#define MIN_THR_US MIN_RC_US
+#endif
+
+#if defined(MOTOR_STOP)
+#define MIN_EFF_THR_US MIN_RC_US
+#else
+#define MIN_EFF_THR_US MIN_THR_US
+#endif
+
+#define MIN_PWM_US 1020 //  [1020;2000]
+#define MAX_PWM_US 2000 //  [1020;2000]
+
+/// introduce a deadband around the stick center 
+// Must be greater than zero, comment if you dont want a deadband on roll, pitch and yaw 
+#if !defined(STICK_DEADBAND_US)
+#define STICK_DEADBAND_US 0
+#endif
+
+#if !defined(STICK_NEUTRAL_DEADBAND_US)
+#define STICK_NEUTRAL_DEADBAND_US 50
+#endif
+
+#if !defined(YAW_DIR)
+#define YAW_DIR 1
+#endif
+
+// Software I2C - SCL is pin SCK/YAW, SDA is pin MISO/Pitch CAUTION VCC pin is 5V which will destroy some sensor boards 
+
+#define I2C_SW 1  // software I2C bus
+#define I2CMPU 0
+
+#define UART_NUMBER 2
+#define RX_BUFFER_SIZE 128
+#define TX_BUFFER_SIZE 128
+#define INBUF_SIZE 64
+
+#define GPS_SERIAL_PORT 1
 
 /// atmega32u4 
+
+#define BEEPER_ON {}
+#define BEEPER_OFF {}
+#define BEEPER_TOGGLE {}
 
 #define LED_BLUE_PINMODE             //
 #define LED_BLUE_PIN                PORTD5
@@ -90,8 +98,8 @@
 #define AUX1PIN                    6
 #endif
 #define AUX2PIN                      7 
-#define AUX3PIN                      1 // unused 
-#define AUX4PIN                      0 // unused 
+//#define AUX3PIN                      1 // unused 
+//#define AUX4PIN                      0 // unused 
 
 #if !defined(RCAUX2PIND17)
 #define PCINT_PIN_COUNT          4
@@ -108,8 +116,15 @@
 
 // Board Orientations and Sensor definitions
 
+//________________________________________
+
 #if defined(NANOWII)
+
+#define I2CBARO 0
+#define I2CMAG 0
+
 #define MPU6050
+
 #define ACC_ORIENTATION(X, Y, Z)  {accADC[ROLL]  = -Y; accADC[PITCH]  =  X; accADC[YAW]  =  Z;}
 #define GYRO_ORIENTATION(X, Y, Z) {gyroADC[ROLL] = -X; gyroADC[PITCH] = -Y; gyroADC[YAW] = -Z;}
 #define MAG_ORIENTATION(X, Y, Z)  {magADC[ROLL]  =  Y; magADC[PITCH]  =  -X; magADC[YAW]  = -Z;}
@@ -127,14 +142,20 @@
 
 #define SONAR_PIN A1 // ??????
 
-#endif
+//________________________________________
 
+#elif defined(Multiwii_32U4_SE)
 
-#if defined(Multiwii_32U4_SE)
+#define I2CBARO 0
+#define I2CMAG 0
+
 #define MPU6050
+#define HMC5883L
+#define MS5611
+
 #define ACC_ORIENTATION(X, Y, Z)  {accADC[ROLL]  = -X; accADC[PITCH]  = -Y; accADC[YAW]  =  Z;}
 #define GYRO_ORIENTATION(X, Y, Z) {gyroADC[ROLL] =  Y; gyroADC[PITCH] = -X; gyroADC[YAW] = -Z;}
-  #define MAG_ORIENTATION(X, Y, Z)  {magADC[ROLL]  =  X; magADC[PITCH]  =  Y; magADC[YAW]  = -Z;}
+#define MAG_ORIENTATION(X, Y, Z)  {magADC[ROLL]  =  X; magADC[PITCH]  =  Y; magADC[YAW]  = -Z;}
 
 #undef INTERNAL_I2C_PULLUPS
 
@@ -143,19 +164,30 @@
 #define LED_BLUE_OFF                 PORTD |= (1<<5); PORTD &= ~(1<<4)
 #define LED_BLUE_ON                  PORTD &= ~(1<<5); PORTD |= (1<<4)
 
-#define VBAT_PIN A3
+#define VBAT_PIN A4
 #define VOLTS_RTOP 58  // 56 Ratios as per HK NanoWii manual for 3S pack
 #define VOLTS_RBOT 33  
 
-#define SONAR_PIN A1 // ??????
+#define SONAR_PIN A1
 
-#endif  
+//________________________________________
 
-#if defined(HK_PocketQuad)
+#elif defined(HK_PocketQuad)
+
+#if !defined(STANDARD_RX)
+#define USE_5V_ON_MOSI
+#define I2CBARO 1
+#define I2CMAG 1
+#else
+#define I2CBARO 0
+#define I2CMAG 0
+#endif
+
 #define DC_MOTORS
-#define CESCO_OFFSET
+
 #define QUADX
 #define PWM_OUTPUTS  4
+
 #define MPU6050
 #define ACC_ORIENTATION(X, Y, Z)  {accADC[ROLL]  = -X; accADC[PITCH]  =  -Y; accADC[YAW]  =  Z;}
 #define GYRO_ORIENTATION(X, Y, Z) {gyroADC[ROLL] = Y; gyroADC[PITCH] = -X; gyroADC[YAW] = -Z;}
@@ -169,6 +201,8 @@
 #define SONAR_PIN A1 // ??????
 
 #endif
+
+//________________________________________
 
 //Multitype declaration for the GUI's 
 
@@ -191,8 +225,6 @@ enum VTailControl {
 enum WingControl {
   RightElevon = 1, LeftElevon};
 
-// Some unsorted "chain" defines 
-
 #if !defined(SERIAL_SUM_PPM) && !defined(SPEKTRUM) && !defined(SBUS) && !defined(FLYSKY)
 #define STANDARD_RX
 #endif
@@ -200,15 +232,15 @@ enum WingControl {
 #if defined(SPEKTRUM)
 #define SPEK_FRAME_SIZE 16
 #if (SPEKTRUM == 1024)
-#define SPEK_CHAN_SHIFT  2       // Assumes 10 bit frames, that is 1024 mode.
-#define SPEK_CHAN_MASK   0x03    // Assumes 10 bit frames, that is 1024 mode.
-#define SPEK_DATA_SHIFT          // Assumes 10 bit frames, that is 1024 mode.
+#define SPEK_CHAN_SHIFT  2 // Assumes 10 bit frames, that is 1024 mode.
+#define SPEK_CHAN_MASK   0x03    
+#define SPEK_DATA_SHIFT          
 #define SPEK_BIND_PULSES 3
 #endif
 #if (SPEKTRUM == 2048)
-#define SPEK_CHAN_SHIFT  3       // Assumes 11 bit frames, that is 2048 mode.
-#define SPEK_CHAN_MASK   0x07    // Assumes 11 bit frames, that is 2048 mode.
-#define SPEK_DATA_SHIFT >> 1     // Assumes 11 bit frames, that is 2048 mode.
+#define SPEK_CHAN_SHIFT  3 // Assumes 11 bit frames, that is 2048 mode.
+#define SPEK_CHAN_MASK   0x07  
+#define SPEK_DATA_SHIFT >> 1
 #define SPEK_BIND_PULSES 5
 #endif
 #endif // SPEKTRUM
@@ -233,16 +265,20 @@ enum WingControl {
 #define ALT_HOLD_THROTTLE_NEUTRAL_ZONE 40
 #endif
 
-
-#if defined(QUADP) || defined(QUADX)
-#define ISMULTICOPTER 
+#if defined(BMP085) || defined(MS5611) || defined(MAXBOTIX) || defined(USE_GPS)
+#define USE_ALT
 #endif
 
-#if defined(USE_MW)
-#define  VERSION  1000 
+#if defined(HMC5883L)
+#define USE_MAG
+#endif
+
+#if (defined(HMC5883L) || defined(MS5611) || defined(BMP085))
+#define CYCLE_US 3000 
 #else
-#define  VERSION  1001 
+#define CYCLE_US 2048 // PID calculations scaled for this - no point in going faster :)
 #endif
+
 
 /*********** RC alias *****************/
 enum rc { // must be in this order
@@ -276,24 +312,28 @@ enum box {
 #if defined(USE_MW)
   BOX_HORIZON,
 #endif
-#if defined(ISMULTICOPTER)
+#if defined(MULTICOPTER)
   BOX_HEAD_FREE,
+#endif
+#if defined(USE_MAG)
   BOX_HEAD_HOLD,
-#else
+#endif
+#if defined(USE_ALT)
+  BOX_ALT_HOLD,
+#endif
+#if defined(USE_GPS)
+  BOX_GPS_HOLD,
+  BOX_GPS_HOME,
+#endif
+#if !defined(MULTICOPTER)
   BOX_BYPASS,
 #endif
-  BOX_ALT_HOLD,
 #if defined(USE_TUNING)
   BOX_RELAY,
 #endif
   BOX_EXP,
-#if defined(USE_GPS)
-  BOX_GPS_HOME,
-  BOX_GPS_HOLD,
-#endif
   CHECKBOX_ITEMS
 };
-
 
 struct flags_struct {
 uint8_t OK_TO_ARM :
@@ -304,10 +344,8 @@ uint8_t ACC_CALIBRATED :
   1 ;
 uint8_t ANGLE_MODE :
   1 ;
-#if defined(USE_MW)
 uint8_t HORIZON_MODE :
-  1 ;
-#endif
+  1;
 uint8_t ALT_HOLD_MODE :
   1 ;  
 uint8_t HEAD_FREE_MODE :
@@ -320,7 +358,7 @@ uint8_t BARO_ACTIVE :
   1 ; 
 uint8_t SMALL_ANGLE_25DEG :
   1;
-  uint8_t STICKS_CENTRED :
+uint8_t STICKS_CENTRED :
   1;
 uint8_t CALIBRATE_MAG :
   1 ;
@@ -340,11 +378,11 @@ uint8_t EXP:
   1;
 uint8_t GPS_FIX:
   1;  
-uint8_t  GPS_FIX_HOME:
+uint8_t GPS_FIX_HOME:
   1;
-uint8_t  GPS_HOLD_MODE:
+uint8_t GPS_HOLD_MODE:
   1;
-uint8_t  GPS_HOME_MODE:
+uint8_t GPS_HOME_MODE:
   1;
 uint8_t ALARM:
   1;
@@ -374,18 +412,23 @@ const char boxnames[] PROGMEM = // names for dynamic generation of config GUI
 "ARM;"
 "ANGLE;"
 #if defined(USE_MW)
-"HORIZ;"
+"HORIZON;"
 #endif
-#if defined(ISMULTICOPTER)
+#if defined(MULTICOPTER)
 "H.FREE;"
-"H.HOLD;"
-#else
-"BYPASS;"
 #endif
+#if defined(USE_MAG)
+"H.HOLD;"
+#endif
+#if defined(USE_ALT)
 "A.HOLD;"
+#endif
 #if defined(USE_GPS)
-"RTH;"
 "P.HOLD;"
+"RTH;"
+#endif
+#if !defined(MULTICOPTER)
+"BYPASS;"
 #endif
 #if defined(USE_TUNING)
 "RELAY;"
@@ -408,34 +451,34 @@ const char pidnames[] PROGMEM =
 
 const uint8_t boxids[] PROGMEM = {
   1 << BOX_ARM, 
-  1 << BOX_ANGLE, 
+  1 << BOX_ANGLE,
 #if defined(USE_MW)
   1 << BOX_HORIZON,
+#endif 
+#if defined(MULTICOPTER)
+  1 << BOX_HEAD_FREE,
 #endif
-#if defined(ISMULTICOPTER)
-  1 << BOX_HEAD_FREE, 
+#if defined(USE_MAG) 
   1 << BOX_HEAD_HOLD,
-#else
+#endif
+#if defined(USE_ALT)
+  1 << BOX_ALT_HOLD,
+#endif
+#if defined(USE_GPS)
+  1 << BOX_GPS_HOLD,
+  1 << BOX_GPS_HOME,
+#endif
+#if !defined(MULTICOPTER)
   1 << BOX_BYPASS,
 #endif
-  1 << BOX_ALT_HOLD,
-#if defined(USE_GPS)
-  1 << BOX_GPS_HOME,
-  1 << BOX_GPS_HOLD
-#endif
 #if defined(USE_TUNING)
-    1 << BOX_RELAY,
+  1 << BOX_RELAY,
 #endif
   1 << BOX_EXP,
 };
 
 
 // Errors
-
-#if !defined(I2CMPU) | !defined(I2CBARO)
-#define I2CMPU 0
-#define I2CBARO 0
-#endif
 
 #if !defined(MAG_ORIENTATION)
 #define MAG_ORIENTATION(X, Y, Z)  {magADC[ROLL]  =  X; magADC[PITCH]  =  Y; magADC[YAW]  = Z;} // GY86 upside down SW I2C
@@ -445,8 +488,8 @@ const uint8_t boxids[] PROGMEM = {
 #error "Select only QUADX, QUADP, FLYING_WING or AIRPLANE"
 #endif
 
-#if ((defined(USE_BOSCH_BARO) + defined(USE_MS_BARO) + defined(USE_SONAR)) > 1)
-#error "Select only ONE of SONAR or MS5611 or BMP085 barometer"
+#if ((defined(BMP085) + defined(MS5611)) > 1)
+#error "Select only ONE of MS5611 or BMP085 barometer"
 #endif
 
 #if !defined(PWM_OUTPUTS)
@@ -460,6 +503,12 @@ const uint8_t boxids[] PROGMEM = {
 //#if (!defined(__AVR_ATmega32U4__) || ((PWM_OUTPUTS !=4) || defined(SERVO)))
 //#error "Implementation restriction: must be exactly 4 DC_MOTORS and no SERVOS and use Atmel 32u4 (Leonardo)"
 //#endif
+
+
+
+
+
+
 
 
 

@@ -1,38 +1,6 @@
-/*
-
- MWLite_gke
- May 2013
- 
- MWLite_gke is free software: you can redistribute it and/or modify
- it under the terms of the GNU General Public License as published by
- the Free Software Foundation, either version 3 of the License, or
- any later version. see <http://www.gnu.org/licenses/>
- 
- MWLite_gke is distributed in the hope that it will be useful,but WITHOUT ANY 
- WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR 
- A PARTICULAR PURPOSE. 
- 
- See the GNU General Public License for more details.
- 
- Lite was based originally on MultiWiiCopter V2.2 by Alexandre Dubus
- www.multiwii.com, March  2013. The rewrite by Prof Greg Egan was renamed 
- so as not to confuse it with the original.
- 
- It preserves the parameter specification and GUI interface with parameters
- scaled to familiar values. 
- 
- Major changes include the control core which comes from UAVX with the 
- addition of MW modes.
- 
- Lite supports only Atmel 32u4 processors using an MPU6050 and optionally 
- BMP085 and MS5611 barometers and HMC5883 magnetometer with 4 motors, 
- no servos and 8KHz PWM for brushed DC motors.
- 
- */
-
-//________________________
-
 #if defined(USE_MW)
+
+#if defined(MULTICOPTER)
 
 conf.P8[ROLL] = conf.P8[PITCH] = 33;  
 conf.I8[ROLL] = conf.I8[PITCH] = 30; 
@@ -52,13 +20,8 @@ conf.P8[YAW] = 80;
 conf.I8[YAW] = 40;
 conf.D8[YAW] = 60;
 
-#if defined(USE_THROTTLE_CURVE)
-conf.thrMid8 = 45; 
-conf.thrExpo8 = 40;
-#else  
 conf.thrMid8 = 50; 
 conf.thrExpo8 = 0; 
-#endif // USE_THROTTLE_CURVE
 
 conf.P8[PIDALT] = 64; 
 conf.I8[PIDALT] = 25; 
@@ -68,11 +31,15 @@ conf.P8[PIDMAG]   = 40;
 
 conf.dynThrPID = 0;
 
-#else // !MW
+#else
 
-//________________________
+#error "MultiWii Control only supports multicopter."
 
-#if defined(ISMULTICOPTER)
+#endif
+
+#else
+
+#if defined(MULTICOPTER)
 
 #if defined(WOLFERL)
 
@@ -89,53 +56,53 @@ conf.D8[PIDLEVEL] = 100;
 conf.P8[ROLL] = conf.P8[PITCH] = 35;   
 conf.D8[ROLL] = conf.D8[PITCH] = 25;
 
-conf.P8[PIDLEVEL] = 50;
-conf.I8[PIDLEVEL] = 10; 
+conf.P8[PIDLEVEL] = 30; // 50 oscillates
+conf.I8[PIDLEVEL] = 20; // 1
 
 #endif
 
-conf.P8[YAW] = 80;  
-conf.I8[YAW] = 25; 
+conf.P8[YAW] = 68;  
+conf.I8[YAW] = 45; 
 
 conf.P8[PIDMAG] = 40; 
 
 conf.rcRate8 = 100; 
 conf.yawRate = 100;
 
-#if defined(USE_THROTTLE_CURVE)
-conf.thrMid8 = 45; 
-conf.thrExpo8 = 40;
-#else  
 conf.thrMid8 = 50; 
 conf.thrExpo8 = 0; 
-#endif // USE_THROTTLE_CURVE
 
 conf.P8[PIDALT] = 64; 
 conf.I8[PIDALT] = 25; 
 conf.D8[PIDALT] = 24;
 
-#else
-
 //________________________
 
-#if defined(FLYING_WING)
+#elif defined(FLYING_WING)
 
-conf.P8[ROLL] = 35;   
-conf.D8[ROLL] = 25;
+conf.P8[ROLL] = 25; // 35;   
+conf.D8[ROLL] = 10;
 
-conf.P8[PITCH] = 35;  
-conf.D8[PITCH] = 25;
+conf.P8[PITCH] = 25; // 35;  
+conf.D8[PITCH] = 10;
 
-conf.P8[YAW] = 80;  
-conf.I8[YAW] = 25; 
+conf.P8[YAW] = 15;  
+conf.I8[YAW] = 0; 
 
-conf.P8[PIDLEVEL] = 90;
-conf.I8[PIDLEVEL] = 10; 
+conf.P8[PIDLEVEL] = 10;
+conf.I8[PIDLEVEL] = 0;//10; 
 
 conf.P8[PIDMAG] = 40; 
 
 conf.rcRate8 = 100; 
-conf.yawRate = 0;
+conf.yawRate = 0; 
+
+conf.thrMid8 = 50; 
+conf.thrExpo8 = 0; 
+
+conf.P8[PIDALT] = 64; 
+conf.I8[PIDALT] = 25; 
+conf.D8[PIDALT] = 24;
 
 //________________________
 
@@ -158,12 +125,6 @@ conf.P8[PIDMAG] = 40;
 conf.rcRate8 = 100; 
 conf.yawRate = 100;
 
-#else
-
-#error "Aircraft type not defined"
-
-#endif 
-
 conf.thrMid8 = 50; 
 conf.thrExpo8 = 0; 
 
@@ -171,9 +132,32 @@ conf.P8[PIDALT] = 64;
 conf.I8[PIDALT] = 25; 
 conf.D8[PIDALT] = 24;
 
-#endif
+#else
+
+#error "Aircraft type not defined"
+
+#endif 
+
+// PI/PID final position 
+conf.P8[PIDPOS] = 50;     
+conf.I8[PIDPOS] = 0;       
+
+conf.P8[PIDPOSR] = 0; 
+conf.I8[PIDPOSR] = 0;  
+conf.D8[PIDPOSR] = 0;
+
+// PID approach velocity
+conf.P8[PIDNAVR] = 0;          
+conf.I8[PIDNAVR] = 0;           
+conf.D8[PIDNAVR] = 0;
+
+conf.P8[PIDVEL] = 0;      
+conf.I8[PIDVEL] = 0;    
+conf.D8[PIDVEL] = 0;
 
 #endif
+
+
 
 
 

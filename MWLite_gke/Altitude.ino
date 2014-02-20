@@ -1,42 +1,13 @@
-/*
-
- MWLite_gke
- May 2013
- 
- MWLite_gke is free software: you can redistribute it and/or modify
- it under the terms of the GNU General Public License as published by
- the Free Software Foundation, either version 3 of the License, or
- any later version. see <http://www.gnu.org/licenses/>
- 
- MWLite_gke is distributed in the hope that it will be useful,but WITHOUT ANY 
- WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR 
- A PARTICULAR PURPOSE. 
- 
- See the GNU General Public License for more details.
- 
- Lite was based originally on MultiWiiCopter V2.2 by Alexandre Dubus
- www.multiwii.com, March  2013. The rewrite by Prof Greg Egan was renamed 
- so as not to confuse it with the original.
- 
- It preserves the parameter specification and GUI interface with parameters
- scaled to familiar values. 
- 
- Major changes include the control core which comes from UAVX with the 
- addition of MW modes.
- 
- Lite supports only Atmel 32u4 processors using an MPU6050 and optionally 
- BMP085 and MS5611 barometers and HMC5883 magnetometer with 4 motors, 
- no servos and 8KHz PWM for brushed DC motors.
- 
- */
 
 // Altitude
 
 void doAltitudeControl(void) {
-  static int16_t altCorr = 0;
+#if defined(USE_ALT)
+
   int16_t throttleDiff;
 
-  if (f.ARMED && f.ALT_HOLD_MODE && (f.BARO_ACTIVE || f.SONAR_ACTIVE)) {      
+if (!f.BYPASS_MODE) {
+  if (f.ARMED && f.ALT_HOLD_MODE && (f.BARO_ACTIVE || f.SONAR_ACTIVE || (f.GPS_FIX_HOME && f.GPS_ACTIVE))) {      
     if (abs(rcCommand[THROTTLE] - hoverThrottle) > ALT_HOLD_THROTTLE_NEUTRAL_ZONE) {
       throttleDiff = rcCommand[THROTTLE] - hoverThrottle;
 #ifdef USE_PROP_ALT_HOLD
@@ -49,6 +20,8 @@ void doAltitudeControl(void) {
     } 
     rcCommand[THROTTLE] = hoverThrottle + altPID; // throttle is overriden by altitude hold
   }
+}
+#endif
 } // doAltitudeControl
 
 uint32_t inline SmoothAltDerivative(int16_t Rate) {
@@ -62,7 +35,7 @@ uint32_t inline SmoothAltDerivative(int16_t Rate) {
   d = Rate - Ratep;
   Ratep = Rate;
 
-  deltaSum = delta[0] + delta[1] + delta[2] + d;
+  deltaSum = delta[0] + delta[1] + delta[2] + d; 
   delta[2] = delta[1];
   delta[1] = delta[0];
   delta[0] = d;
@@ -87,146 +60,78 @@ int16_t filterROC(float BaroROC, float dT) {
   return(velZ);
 } // filterROC
 
-#if defined(USE_MW_ALT_CONTROL)
+#define Kdd 10 // no idea yet!
 
 void computeAltitudeControl(void) {
+#if defined(USE_ALT)
 
-  static int32_t baroGroundPressure;
+  int16_t desiredROC, desiredAcc;
   static int32_t relativeAltitudep;
-  static float vel = 0.0;
+ // static float vel = 0.0;
   static int16_t accZoffset = 0;
   int16_t vel_tmp;
-  int16_t baroVel;
+  int16_t sensorVel;
   int16_t AltE, P, I, D;
   static uint32_t prevUpdateuS = 0;
   float dT, dTR;
 
   if (updateAltitude()) {
+
     NowuS = micros();
     dT = (float)(NowuS - prevUpdateuS) * 0.000001f;
     dTR = 1.0 / dT;
     prevUpdateuS = NowuS; 
 
+#if defined(USE_MW_ALT_CONTROL)
+
     AltE = Limit1(desiredAltitude - relativeAltitude, 300);
     AltE = Threshold(AltE, 10); //remove small P parameter to reduce noise near zero position
     P = Limit1((conf.P8[PIDALT] * AltE >> 7), 150);
 
-    AltitudeIntE += conf.I8[PIDALT] * AltE >>6;
+    AltitudeIntE += (conf.I8[PIDALT] * AltE) >>6;
     AltitudeIntE = Limit1(AltitudeIntE, 30000);
     I = AltitudeIntE >> 9; //I in range +/-60
 
-    baroVel = (relativeAltitude - relativeAltitudep) * dTR;
+#define USE_ROC_FILTER
+#if defined(USE_ROC_FILTER)
+    sensorVel = SmoothAltDerivative(relativeAltitude) * dTR;
+#else
+    sensorVel = (relativeAltitude - relativeAltitudep) * dTR;
     relativeAltitudep = relativeAltitude;
+#endif
+    sensorVel = Limit1(sensorVel, 300); // constrain baro velocity +/- 300cm/s
+    sensorVel = Threshold(sensorVel, 10); // to reduce noise near zero    
 
-    baroVel = Limit1(baroVel, 300); // constrain baro velocity +/- 300cm/s
-    baroVel = Threshold(baroVel, 10); // to reduce noise near zero
-
-    ROC = filterROC(baroVel, dT);  
+    ROC = filterROC(sensorVel, dT); // CF using Z acc 
     ROC = Threshold(ROC, 5);
 
     D = Limit1(conf.D8[PIDALT] * ROC >> 4, 150);
 
     altPID = constrain(P + I - D, -150, 200);
 
-#if defined(DEBUG_ALT_HOLD)
-    debug[0] = ROC;
-    debug[1] = desiredAltitude; 
-    debug[2] = altPID; 
-    debug[3] = rcCommand[THROTTLE]; 
-#endif
-  }
-
-} // computeAltitudeControl
-
 #else
 
-#define Kdd 10 // no idea yet!
-
-void computeAltitudeControl(void) {
-  int16_t AltE, P, I, D, DD, desiredROC, desiredAcc;
-  static uint32_t prevUpdateuS = 0;
-  float dT, dTR;
-
-  if (updateAltitude()) {
-    NowuS = micros();
-    dT = (float)(NowuS - prevUpdateuS) * 0.000001f;
-    dTR = 1.0 / dT;
-    prevUpdateuS = NowuS;
-
-    desiredROC = desiredAltitude - ((relativeAltitude * conf.P8[PIDALT]) >> 7);
+    AltE = Limit1(desiredAltitude - relativeAltitude, 300);
+    desiredROC = (AltE * conf.P8[PIDALT]) >> 7;
     desiredROC = constrain(desiredROC, 100, 200);
 
     ROC = SmoothAltDerivative(relativeAltitude) * dTR;
-    desiredAcc =  desiredROC - ((ROC * conf.D8[PIDALT]) >> 4);
+    desiredAcc = desiredROC - ((ROC * conf.D8[PIDALT]) >> 4);
 
     calculateVerticalAcceleration();
     altPID = desiredAcc - ((accZ * Kdd) >> 2); 
 
+#endif
+
 #if defined(DEBUG_ALT_HOLD)
     debug[0] = ROC;
-    debug[1] = desiredAltitude; 
+    debug[1] = desiredAltitude;
     debug[2] = altPID; 
     debug[3] = rcCommand[THROTTLE]; 
 #endif
   }
-} // computeAltitudeControl
-
 #endif
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+} // computeAltitudeControl
 
 
 

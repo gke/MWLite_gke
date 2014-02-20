@@ -1,34 +1,3 @@
-/*
-
- MWLite_gke
- May 2013
- 
- MWLite_gke is free software: you can redistribute it and/or modify
- it under the terms of the GNU General Public License as published by
- the Free Software Foundation, either version 3 of the License, or
- any later version. see <http://www.gnu.org/licenses/>
- 
- MWLite_gke is distributed in the hope that it will be useful,but WITHOUT ANY 
- WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR 
- A PARTICULAR PURPOSE. 
- 
- See the GNU General Public License for more details.
- 
- Lite was based originally on MultiWiiCopter V2.2 by Alexandre Dubus
- www.multiwii.com, March  2013. The rewrite by Prof Greg Egan was renamed 
- so as not to confuse it with the original.
- 
- It preserves the parameter specification and GUI interface with parameters
- scaled to familiar values. 
- 
- Major changes include the control core which comes from UAVX with the 
- addition of MW modes.
- 
- Lite supports only Atmel 32u4 processors using an MPU6050 and optionally 
- BMP085 and MS5611 barometers and HMC5883 magnetometer with 4 motors, 
- no servos and 8KHz PWM for brushed DC motors.
- 
- */
 
 #include <avr/eeprom.h>
 
@@ -55,28 +24,15 @@ void readEEPROM(void) {
   if((calculate_sum((uint8_t*)&conf, sizeof(conf)) != conf.checksum) || ( conf.thisVersion != VERSION)) {
     blinkLED(100,3);    
     LoadDefaults(); 
-
     memset(&global_conf, 0, sizeof(global_conf));
     writeGlobalSet(1);
     readGlobalSet(); 
-  }
-
-#if defined(USE_THROTTLE_CURVE)
-
-  // 500/128 = 3.90625    3.9062 * 3.9062 = 15.259   1526*100/128 = 1192
-  for(i = 0; i < 5; i++) 
-    rollpitchCurve[i] = (1526+conf.rcExpo8*(sq(i)-15))*i*(int32_t)conf.rcRate8/1192;
-
-  for(i = 0; i < 11; i++) {
-    int16_t tmp = 10*i-conf.thrMid8;
-    uint8_t y = 1;
-    if (tmp>0) y = 100-conf.thrMid8;
-    if (tmp<0) y = conf.thrMid8;
-    thrCurve[i] = 10*conf.thrMid8 + tmp*( 100-conf.thrExpo8+(int32_t)conf.thrExpo8*sq(tmp)/sq(y) )/10; // [0;1000]
-    thrCurve[i] = conf.minthrottle + (int32_t)(MAX_THROTTLE-conf.minthrottle)* thrCurve[i]/1000;  // [0;1000] -> [conf.minthrottle;MAXTHROTTLE]
-  }
-
-#endif // USE_THROTTLE_CURVE 
+  } 
+    
+#if defined(USE_MW)
+    for(i = 0; i < 5; i++) 
+      rollpitchCurve[i] = (1526+conf.rcExpo8*(sq(i)-15))*i*(int32_t)conf.rcRate8/1192;
+#endif
 
 } // readEEPROM
 
@@ -107,7 +63,7 @@ void LoadDefaults(void) {
   for(i = 0; i < CHECKBOX_ITEMS; i++)
     conf.activate[i] = 0;
 
-#if defined(ISMULTICOPTER)  
+#if defined(MULTICOPTER)  
   f.ANGLE_MODE = true; 
   conf.activate[BOX_ANGLE] = 3; // Aux1 all positions
 #else
@@ -117,15 +73,16 @@ void LoadDefaults(void) {
   conf.activate[BOX_BYPASS] = 6; // Aux1 
 #endif
 
-  conf.cycletimeuS = CYCLETIME;
-
-  conf.minthrottle = MIN_THROTTLE;
+  conf.cycletimeuS = CYCLE_US;
+  conf.minthrottleuS = MIN_EFF_THR_US;
 
   writeParams(0); // this will also (p)reset this Version with the current version number again.
 
   calibratingG = 512;
 
 } // loadDefaults
+
+
 
 
 

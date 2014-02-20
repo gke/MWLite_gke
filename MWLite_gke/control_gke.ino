@@ -1,61 +1,6 @@
-/*
-
- MWLite_gke
- May 2013
- 
- MWLite_gke is free software: you can redistribute it and/or modify
- it under the terms of the GNU General Public License as published by
- the Free Software Foundation, either version 3 of the License, or
- any later version. see <http://www.gnu.org/licenses/>
- 
- MWLite_gke is distributed in the hope that it will be useful,but WITHOUT ANY 
- WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR 
- A PARTICULAR PURPOSE. 
- 
- See the GNU General Public License for more details.
- 
- Lite was based originally on MultiWiiCopter V2.2 by Alexandre Dubus
- www.multiwii.com, March  2013. The rewrite by Prof Greg Egan was renamed 
- so as not to confuse it with the original.
- 
- It preserves the parameter specification and GUI interface with parameters
- scaled to familiar values. 
- 
- Major changes include the control core which comes from UAVX with the 
- addition of MW modes.
- 
- Lite supports only Atmel 32u4 processors using an MPU6050 and optionally 
- BMP085 and MS5611 barometers and HMC5883 magnetometer with 4 motors, 
- no servos and 8KHz PWM for brushed DC motors.
- 
- */
-
-// MW control routines replaced by those from UAVX by Prof Greg Egan aka gke 2013
-
 #if !defined(USE_MW)
 
-#if defined(USE_TX_TUNING)
-#define txTuneRate(n)  rateGain[n]/1000
-#else
-#define txTuneRate(n) 1
-#endif
-
-static int16_t rateGain[2];
-
-int16_t Threshold(int16_t v, int16_t t) {
-
-  if (v > t)
-    v -= t;
-  else if (v < -t)
-    v += t;
-  else
-    v = 0;
-
-  return (v);
-} // Threshold
-
-#define RATE_F_CUT   20
-#define RATE_TC      ((int32_t)(1000000 / ( 2.0 * PI * RATE_F_CUT))) 
+// MW control routines replaced by those from UAVX by Prof Greg Egan aka gke 2013
 
 int32_t SmoothRateDerivative(uint8_t axis, int32_t Rate) {
   // simple 3 sample moving average filter
@@ -73,71 +18,53 @@ int32_t SmoothRateDerivative(uint8_t axis, int32_t Rate) {
   d = Rate - RateP[axis];
   RateP[axis] = Rate;
 
-  d = (d *(4194304L / dTuS)) >> 8;
-
   deltaSum = delta[0][axis] + delta[1][axis] + d;
   delta[1][axis] = delta[0][axis];
   delta[0][axis] = d;
 
-  //#define USE_RATE_DELTA_LPF
-#if defined(USE_RATE_DELTA_LPF)
-  //deltaSum = deltaSumP[axis] + (dTuS / (RC + dTuS)) * (deltaSum - deltaSumP[axis]);
-  deltaSum = deltaSumP[axis] + ((deltaSum - deltaSumP[axis]) * CYCLETIME)/(RATE_TC + CYCLETIME);  
-  deltaSumP[axis] = deltaSum;
-#endif
-
   return (deltaSum);
 } // SmoothRateDerivative  
-
-int8_t ScaleParam(int16_t c, uint8_t r, uint8_t p) {
-  uint16_t Scale;
-
-  Scale = constrain(500 - (((int32_t)abs(c) * r) >> 6), 0, 500);
-  return(((uint32_t)p * Scale) >> 9); 
-
-} // ScaleParam
 
 void doRCRates(void) {
   uint8_t chan, index;
   int16_t Temp;
 
   for (chan = 0; chan < RC_CHANS; chan++)
-    if (chan != THROTTLE)
-      rcCommand[chan] = Limit1(rcData[chan] - MIDRC, 500); 
+    rcCommand[chan] = Limit1(rcData[chan] - MID_RC_US, 500); // simpler to inc throttle
 
   for (chan = ROLL; chan <= YAW; chan++)
-    rcCommand[chan] = Threshold(rcCommand[chan], DEADBAND);
+    rcCommand[chan] = Threshold(rcCommand[chan], STICK_DEADBAND_US);
 
-  f.STICKS_CENTRED = (abs(rcCommand[ROLL]) < STICK_NEUTRAL_DEADBAND) && (abs(rcCommand[PITCH]) < STICK_NEUTRAL_DEADBAND);
+  rcCommand[THROTTLE] = constrain(rcData[THROTTLE], MIN_RC_US, MAX_THR_US);
+#if defined(LVC_LIMIT)
+  rcCommand[THROTTLE] = ((((int32_t)(rcCommand[THROTTLE] - MIN_RC_US)) * throttleLVCScale) >> 10) + MIN_RC_US;
+#endif      
 
-#if defined(USE_THROTTLE_CURVE)
-  Temp = constrain(rcData[THROTTLE],MIN_CHECK,2000);
-  Temp = (uint32_t)(Temp - MIN_CHECK) * 2559 / (2000 - MIN_CHECK); // [MINCHECK;2000] -> [0;2559]
-  index = Temp / 256; // range [0;9]
-  rcCommand[THROTTLE] = thrCurve[index] + (Temp - index*256) * (thrCurve[index+1] - thrCurve[index]) / 256; // [0;2559] -> expo -> [conf.minthrottle;MAXTHROTTLE]
-#else
-  rcCommand[THROTTLE] = constrain(rcData[THROTTLE], MIN_COMMAND, MAX_THROTTLE);
-#endif // USE_THROTTLE_CURVE
+  f.STICKS_CENTRED = (abs(rcCommand[ROLL]) < STICK_NEUTRAL_DEADBAND_US) && (abs(rcCommand[PITCH]) < STICK_NEUTRAL_DEADBAND_US);
 
-    rcCommand[THROTTLE] = ((((int32_t)(rcCommand[THROTTLE] - MIN_COMMAND)) * throttleLVCScale) >> 10) + MIN_COMMAND;
+} // doRCRates
 
-#if defined(USE_TX_TUNING)
-#if defined(ISMULTICOPTER)
-  debug[0] = rateGain[ROLL] = rateGain[PITCH] = rcCommand[AUX3] + 500;
-#else
-  debug[0] = rateGain[ROLL] = rcCommand[AUX3] + 500;
-  debug[1] = rateGain[PITCH] = rcCommand[AUX4] + 500;
-#endif
-#endif 
+int16_t getDesiredAttitude(uint8_t axis) {
+  uint16_t a;
 
-} // DoRCRates
+  a = rcCommand[axis] * STICK_TO_ANGLE;
+  if (f.GPS_HOME_MODE || f.GPS_HOLD_MODE) {
+    a += navCorr[axis];
+    a = Limit1(a, MAX_NAV_BANK_ANGLE);
+  }
+  else     
+    a = Limit1(a, MAX_BANK_ANGLE);
+    
+  return(a);
+} // getDesiredAttitude
 
 void computeControl(void) {
-#define ANGLE_MAX_I 200
+#define ANGLE_MAX_I 200L
+#define RATE_MAX_D 300L
 #define YAW_RATE_MAX_P 300L
 #define YAW_RATE_MAX_I 250L
 
-  static uint8_t axis;
+  uint8_t axis;
   int16_t AngleP, AngleI, AngleD, RateP, RateI, RateD, DesiredAngle, DesiredRate, P, I, D;
   int32_t AngleE, RateE;
   int16_t Temp;
@@ -146,53 +73,56 @@ void computeControl(void) {
 
   // Roll/Pitch
   for (axis = ROLL; axis < YAW; axis++)
+#if defined(USE_TUNING)
     if (f.RELAY_MODE && tuningAxis[axis])
       axisPID[axis] = tuneStimulus[tuneaxis];
-    else { 
+    else
+#endif
+    { 
 
       //________________________
 
-#if defined(WOLFERL)
+#if defined(WOLFERL_CONTROL)
 
-      // From UAVX (Wolferl modified rate scheme) - as simple as it gets?
-      DesiredAngle = rcCommand[axis] * STICK_TO_ANGLE;
-      DesiredAngle = Limit1(DesiredAngle, MAX_BANK_ANGLE);
+      // From UAVX (Wolferl modified rate scheme) - as simple as it gets?   
+      DesiredAngle = getDesiredAttitude(axis);
 
       P = -((int32_t)gyroData[axis] * conf.P8[axis]) >> 8;
-      I = -Limit1(((int32_t)angle[axis] * conf.I8[axis]) >> 5, 500); 
-      D = (SmoothRateDerivative(axis, gyroData[axis]) * conf.D8[axis]) >> 7;
+      I = -Limit1(((int32_t)angle[axis] * conf.I8[axis]) >> 5, 200); 
+      D = (SmoothRateDerivative(axis, gyroData[axis]) * conf.D8[axis]) >> 5; //7;
+      D = Limit1(D, RATE_MAX_D);
 
       axisPID[axis] = (P + I - D) + DesiredAngle;  
 
       //________________________
 
-#elif defined(V20131112) // P-PD
+#else // PI-PD
 
       if (f.ANGLE_MODE || f.STICKS_CENTRED) {
 
-        DesiredAngle = rcCommand[axis]; // * STICK_TO_ANGLE; // stick is [-500;500] or 50deg unscaled
-        DesiredAngle = Limit1(DesiredAngle, MAX_BANK_ANGLE);
+        DesiredAngle = getDesiredAttitude(axis);
 
         AngleE = DesiredAngle - angle[axis]; 
-        AngleP = (AngleE * conf.P8[PIDLEVEL] * txTuneRate(axis)) >> 3;
+        AngleP = (AngleE * conf.P8[PIDLEVEL]) >> 3;
 
-        AngleIntE[axis] = Limit1(AngleIntE[axis] + (int32_t)AngleE * conf.I8[axis], ANGLE_MAX_I << 13);
-        AngleI = AngleIntE[axis] >> 13;
+        AngleIntE[axis] = Limit1(AngleIntE[axis] + AngleE * conf.I8[axis], (int32_t)ANGLE_MAX_I << 11); 
+        AngleI = AngleIntE[axis] >> 13; 
 
         DesiredRate = AngleP + AngleI;
       } 
-      else
-        DesiredRate = (rcCommand[axis] << 6) / conf.P8[axis];
+      else {
+        AngleIntE[axis] = 0; // for return to Angle Mode
+        DesiredRate = ((int32_t)(rcCommand[axis]) << 4) / conf.P8[axis]; // was 6
+      }
 
       RateE = DesiredRate - (gyroData[axis] >> 2);
 
       RateP = (RateE * conf.P8[axis]) >> 6;
-      RateD = (SmoothRateDerivative(axis, RateE) * conf.D8[axis]) >> 5;
+      RateD = (SmoothRateDerivative(axis, RateE) * conf.D8[axis]) >> 3; //5;
+      RateD = Limit1(RateD, RATE_MAX_D);
 
       axisPID[axis] = RateP + RateD;
 
-#else
-#error "Control scheme not specified"
 #endif 
 
     }
@@ -205,33 +135,20 @@ void computeControl(void) {
   RateP = ((int32_t)RateE * conf.P8[YAW]) >> 6;
   RateP = Limit1(RateP, YAW_RATE_MAX_P);
 
-  if (abs(DesiredRate) > STICK_NEUTRAL_DEADBAND) 
+  if (abs(DesiredRate) > STICK_NEUTRAL_DEADBAND_US) 
     RateIntE[YAW] = RateI = 0;
   else
   {
-    RateIntE[YAW] = Limit1(RateIntE[YAW] + (int32_t)RateE * conf.I8[YAW], YAW_RATE_MAX_I << 13);
+    RateIntE[YAW] = Limit1(RateIntE[YAW] + (int32_t)RateE * conf.I8[YAW], (int32_t)YAW_RATE_MAX_I << 13);
     RateI = RateIntE[YAW] >> 13;
   }
 
   axisPID[YAW] = RateP + RateI;
-
-  // axisPID[YAW] = Limit1(axisPID[YAW], abs(rcCommand[YAW]) + 100); // prevent "yaw jump" - slew limit?
+  //axisPID[YAW] = Limit1(RateP + RateI, abs(rcCommand[YAW]) + 100); // prevent "yaw jump" - slew limit?
 
 } // computeControl
 
 #endif
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 

@@ -56,15 +56,11 @@ static boolean tuningAxis[3] = {
 static int16_t tuneStimulus[3];
 static uint8_t tuneaxis = PITCH;
 
-boolean tuningAlt = false;
-static int32_t tuneAltStimulus;
-
 // RC
 
 //static int16_t maxRollPitchStick = 0;
 static int16_t rcData[RC_CHANS]; // [1000:2000]
 static int16_t rcCommand[RC_CHANS]; // interval [1000;2000] for THROTTLE and [-500;+500] for ROLL/PITCH/YAW 
-static uint16_t thrCurve[11]; // lookup table for expo & mid THROTTLE
 static uint16_t rollpitchCurve[5]; // lookup table roll and pitch
 
 static boolean rcNewValues = false;
@@ -78,6 +74,14 @@ static boolean firstRC = true;
 #define  GRAVITY_R  (1.0/(float)GRAVITY)
 #define  ACC_25DEG  ((int16_t)(GRAVITY * 0.423));
 
+// Serial
+
+static volatile uint8_t rxHead[UART_NUMBER],rxTail[UART_NUMBER];
+static uint8_t rxBuff[RX_BUFFER_SIZE][UART_NUMBER];
+static volatile uint8_t txHead[UART_NUMBER],txTail[UART_NUMBER];
+static uint8_t txBuff[TX_BUFFER_SIZE][UART_NUMBER];
+static uint8_t cmdBuf[INBUF_SIZE+1];
+
 static int16_t angle[3]    = {
   0,0};  // 0.1deg
 
@@ -85,17 +89,40 @@ static int16_t  gyroADC[3], accADC[3], magADC[3];
 static int16_t accData[3], gyroData[3];
 static uint16_t calibratingA = 0;  
 static uint16_t calibratingG;
-static float YawAngle = 0.0f;
+static float yawAngle = 0.0f;
 static int16_t Heading = 0;
 static int16_t holdHeading = 0;
 static int16_t headfreeHeading;
+static int32_t relativeAltitude = 0;
 static float velZ = 0.0;
 static int16_t accZ = 0;
+
+static int32_t rangefinderAltitude = 0;
+
+// GPS
+
+enum {
+  LAT, LON};
+uint8_t gpsSats;
+int32_t gpsHome[3];
+int32_t gpsHold[3];
+int32_t gpsPosition[2];
+int16_t gpsAltitude = 0;
+boolean gpsPacketReceived = false;
+float gpsLonScale = 1.0f;
+int16_t gpsHomeAltitude = 0;
+int16_t gpsSpeed = 0;
+int16_t gpsGroundCourse = 0;
+int16_t navTakeoffHeading = 0;
+int16_t homeHeading = 0;
+int32_t homeDistance = 0;
+static int16_t navCorr[3];
+boolean newHold = true;
 
 // Baro
 
 boolean calibratingB = true;
-static int32_t  relativeAltitude;  // in cm
+static int32_t  baroAltitude;  // in cm
 static int16_t  ROC; // variometer in cm/s
 static int32_t densityAltitude = 0; // cm
 static int16_t AltitudeIntE = 0;
@@ -119,8 +146,9 @@ static int16_t flaperons = 0;
 // EEPROM
 
 static struct {
-uint8_t P8[3], I8[3], D8[3];
-} dyn;
+  uint8_t P8[3], I8[3], D8[3];
+} 
+dyn;
 
 static struct {
   int16_t accZero[3];
@@ -145,7 +173,7 @@ static struct {
   uint8_t thrExpo8;
   uint16_t activate[CHECKBOX_ITEMS];
   uint16_t cycletimeuS;
-  int16_t minthrottle;
+  int16_t minthrottleuS;
   uint8_t checksum; // must be last! 
 } 
 conf;
@@ -189,8 +217,7 @@ void annexCode() {
 
 void setup() { 
 
-  SerialOpen(0,SERIAL0_COM_SPEED);
-  SerialOpen(1,SERIAL1_COM_SPEED);
+  serialOpen(0, SERIAL0_COM_SPEED);
 
   LED_BLUE_PINMODE;
   initOutput();
@@ -198,8 +225,6 @@ void setup() {
 #if defined(SPEKTRUM)
   checkSpektrumBinding();
 #endif
-
-  softi2cPower();
 
   //  LoadDefaults();
   //  writeParams(1);
@@ -211,6 +236,8 @@ void setup() {
   readEEPROM();
   readGlobalSet();
   readEEPROM(); // load current setting data
+
+  softi2cPower();
 
   blinkLED(50, 1);          
   configureReceiver();
@@ -227,8 +254,8 @@ void setup() {
   zeroIntegrals();
   zeroAngles();
   relativeAltitude = ROC = 0;
-  
-  //initGPS();
+
+  initGPS();
 
 } // setup
 
@@ -244,12 +271,14 @@ void loop (void) {
 
   previousCycleuS = micros();
   nextCycleuS = previousCycleuS + conf.cycletimeuS;
-  
+
   getRatesAndAccelerations();
   getEstimatedAttitude();  
   computeAltitudeControl();
   updateMagnetometer();
-  
+
+  updateNav();
+
   computeControl();
   mixTable();
   pwmWrite();
@@ -266,6 +295,9 @@ void loop (void) {
   annexCode();
 
 } // loop
+
+
+
 
 
 
