@@ -23,17 +23,14 @@
 // 1000 gives good angle recovery with some jitters after full-on aerobatics.
 // 5000 gives smooth cruising flight with minimal jitters.
 
-#ifndef GYR_CMPF_FACTOR
-#define GYR_CMPF_FACTOR 1000 // [1000..5000]
-#endif
+
+#define ACC_CONF 0.002f
+#define ONE_MINUS_ACC_CONF  (1.0f-ACC_CONF)
 
 // Set the Gyro Weight for Gyro/Magnetometer complementary filter
 // Increasing this value would reduce and delay Magnetometer influence on the output of the filter
-#define GYR_CMPFM_FACTOR 250
-
-//****** end of advanced users settings *************
-#define INV_GYR_CMPF_FACTOR   (1.0f / (GYR_CMPF_FACTOR  + 1.0f))
-#define INV_GYR_CMPFM_FACTOR  (1.0f / (GYR_CMPFM_FACTOR + 1.0f))
+#define MAG_CONF 0.004f
+#define ONE_MINUS_MAG_CONF (1.0f-MAG_CONF)
 
 //****** end of advanced users settings *************
 
@@ -89,11 +86,31 @@ static t_int32_t_vector EstM32;
 static float invG;
 static t_fp_vector EstM;
 
+boolean checkAcc(int16_t * src, float * dest) {
+  int8_t axis;
+  float NormR;
+  int32_t Norm;
+  boolean accOK;
+
+  Norm = sqrt(sq((int32_t)src[ROLL]) + sq((int32_t)src[PITCH]) + sq((int32_t)src[YAW]));
+
+  accOK = abs(Norm - GRAVITY) < (((int32_t)GRAVITY*15)/100); // +/- 15% G
+  if (accOK) {
+    NormR = GRAVITY / Norm;
+    for (axis = ROLL; axis <= YAW; axis++)
+      dest[axis] =  (float)src[axis] * NormR;     
+  }
+
+  return accOK;
+
+} // checkAcc
+
 void getEstimatedAttitude(void){
   static uint32_t PrevuS;
   uint32_t TimeruS;
   int16_t Temp;
   uint8_t axis;
+  float acc[3];
   int32_t sqGZ, sqGX, sqGY, sqGX_sqGZ, accMagSq; 
   float invmagXZ;  
   float gyroScale, deltaGyroAngle[3];
@@ -103,19 +120,14 @@ void getEstimatedAttitude(void){
   gyroScale = (NowuS - PrevuS) * GYRO_SCALE;
   PrevuS = NowuS;
 
-  accMagSq = 0;
-  for (axis = ROLL; axis <= YAW; axis++) {
+  for (axis = ROLL; axis <= YAW; axis++) 
     deltaGyroAngle[axis] = (float)gyroData[axis] * gyroScale; 
-    accMagSq += sq((int32_t)accData[axis]);
-  }
-  accMagSq = (accMagSq * 100) / GRAVITY_SQ;
 
   rotateV(&EstG.V, deltaGyroAngle);
 
-  accOK = (accMagSq > 72) && (accMagSq < 133); // >1.15G or <0.85G 
-  if (accOK) 
+  if(checkAcc(&accData[ROLL], &acc[ROLL]))   
     for (axis = ROLL; axis <= YAW; axis++) 
-      EstG.A[axis] = (EstG.A[axis] * GYR_CMPF_FACTOR + (float)accData[axis]) * INV_GYR_CMPF_FACTOR;
+      EstG.A[axis] = EstG.A[axis] * ONE_MINUS_ACC_CONF + acc[axis] * ACC_CONF;
 
   for (axis = ROLL; axis <= YAW; axis++)
     EstG32.A[axis] = EstG.A[axis];
@@ -137,7 +149,7 @@ void getEstimatedAttitude(void){
     rotateV(&EstM.V,deltaGyroAngle);
 
     for (axis = ROLL; axis <= YAW; axis++) 
-      EstM32.A[axis] = EstM.A[axis] = (EstM.A[axis] * GYR_CMPFM_FACTOR  + magADC[axis]) * INV_GYR_CMPFM_FACTOR;
+      EstM32.A[axis] = EstM.A[axis] = EstM.A[axis] * ONE_MINUS_MAG_CONF)  + (float)magADC[axis] * MAG_CONF;
 
     angle[YAW] = atan2(
     EstM32.V.Z * EstG32.V.X - EstM32.V.X * EstG32.V.Z,
@@ -150,7 +162,7 @@ void getEstimatedAttitude(void){
     yawAngle += deltaGyroAngle[YAW]; // use direct integration
 #if defined(USE_GPS) && !defined(MULTICOPTER) && !defined(USE_MAG)
     if (f.GPS_FIX && (gpsSpeed > 400)) 
-      yawAngle = (yawAngle * GYR_CMPFM_FACTOR + (float)gpsGroundCourse * PI/1800.0) * INV_GYR_CMPFM_FACTOR;
+      yawAngle = (yawAngle * (1.0 - GYR_CMPFM_FACTOR) + (float)gpsGroundCourse * PI/1800.0) * GYR_CMPFM_FACTOR;
 #endif  
     Temp = yawAngle * (1800.0/PI);
     while (Temp < 0)
@@ -190,6 +202,11 @@ void calculateVerticalAcceleration(void) {
     accZ = 0;
 
 } // calculateVerticalAcceleration
+
+
+
+
+
 
 
 

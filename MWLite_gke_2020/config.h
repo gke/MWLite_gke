@@ -26,9 +26,6 @@
 //#define MPU6050_DLPF_CFG MPU6050_LPF_98HZ
 //#define MPU6050_DLPF_CFG MPU6050_LPF_188HZ
 
-#define GYR_CMPF_FACTOR 1000 // faster angle estimate recovery after aerobatics but more jitters
-//#define GYR_CMPF_FACTOR 4000 // better for crusing and less jitters
-
 #define SPEKTRUM 1024
 //#define SPEKTRUM 2048
 //#define SERIAL_SUM_PPM  PITCH,YAW,THROTTLE,ROLL,AUX1,AUX2,AUX3,AUX4,8,9,10,11 //For Graupner/Spektrum
@@ -59,8 +56,8 @@
 #if defined(MULTICOPTER)
 
 //#define ECKS
-//#define PUMQ
-#define WLTOYS
+#define PUMQ
+//#define WLTOYS
 
 //#define WOLFERL_CONTROL
 #define UAVX_CONTROL
@@ -77,10 +74,12 @@
 
 #if defined(ECKS)
 
-#define Multiwii_32U4_SE
-//#define NANOWII
+//#define Multiwii_32U4_SE
+#define NANOWII
 //#define BMP085
 //#define MS5611
+//#define HMC5883L
+//#define USE_GPS
 
 #define SERIAL_SUM_PPM  PITCH,YAW,THROTTLE,ROLL,AUX1,AUX2,AUX3,AUX4,8,9,10,11 //For Graupner/Spektrum
 
@@ -264,9 +263,6 @@
 #define STICK_DEADBAND_US 15 // uSec was 10
 #define STICK_NEUTRAL_DEADBAND_US 70 // forces angle mode on this axis if sticks below this deflection [0:500] // was 50
 
-#define GYR_CMPF_FACTOR 1000 // faster angle estimate recovery after aerobatics but more jitters
-//#define GYR_CMPF_FACTOR 4000 // better for cruising and less jitters
-
 #if defined(MULTICOPTER)
 #define MPU6050_DLPF_CFG MPU6050_LPF_188HZ
 #else
@@ -283,7 +279,7 @@
 //#define DEBUG_NAV // debug1 = navRoll, debug2 = navPitch, debug3 = navYaw ...
 //#define DEBUG_ATTITUDE // debug1 = roll, debug2 = pitch, debug3 = yaw, debug4 = accOK
 //#define DEBUG_BARO // debug1 = temp*100, debug1 = press*10, debug3 = groundalt, debug4 = alt
-#define DEBUG_ALT_HOLD // debug1 = rate of climb, debug2 = desired alt, debug3 = BaroPID, debug4 = throttle
+//#define DEBUG_ALT_HOLD // debug1 = rate of climb, debug2 = desired alt, debug3 = BaroPID, debug4 = throttle
 //#define DEBUG_HEAD_HOLD // debug1 = heading, debug2 = desired heading, debug3 = error, debug4 = yaw command
 //#define DEBUG_TRIMS // debug2 = aileron, debug3 = elevator, debug4 = rudder trims
 

@@ -85,14 +85,14 @@
 #define BEEPER_OFF {}
 #define BEEPER_TOGGLE {}
 
-#define LED_BLUE_PINMODE             //
-#define LED_BLUE_PIN                PORTD5
-#define LED_BLUE_TOGGLE             PIND |= 1<<5     //switch LEDPIN state (Port D5)
-#define LED_BLUE_OFF                PORTD |= (1<<5)
-#define LED_BLUE_ON                 PORTD &= ~(1<<5)
+#define LED_BLUE_PINMODE           DDRD |= (1<<4)           //D4 to output
+#define LED_BLUE_TOGGLE            PIND |= (1<<5)|(1<<4)    //switch LEDPIN state (Port D5) & pin D4
+#define LED_BLUE_OFF               PORTD |= (1<<5); PORTD &= ~(1<<4)
+#define LED_BLUE_ON                PORTD &= ~(1<<5); PORTD |= (1<<4)
 
 #define I2C_PULLUPS_ENABLE         PORTD |= 1<<0; PORTD |= 1<<1   // PIN 2&3 (SDA&SCL)
 #define I2C_PULLUPS_DISABLE        PORTD &= ~(1<<0); PORTD &= ~(1<<1)
+
 #define PPM_PIN_INTERRUPT          DDRE &= ~(1 << 6);PORTE |= (1 << 6);EIMSK |= (1 << INT6);EICRB |= (1 << ISC61)|(1 << ISC60)
 #if !defined(SPEK_SERIAL_PORT)
 #define SPEK_SERIAL_PORT           1
@@ -113,22 +113,23 @@
 #define YAWPIN                     2
 #define AUX1PIN                    6
 #endif
-#define AUX2PIN                      7 
-//#define AUX3PIN                      1 // unused 
-//#define AUX4PIN                      0 // unused 
+#define AUX2PIN                    7 
+//#define AUX3PIN                  1 // unused 
+//#define AUX4PIN                  0 // unused 
 
 #if !defined(RCAUX2PIND17)
-#define PCINT_PIN_COUNT          4
-#define PCINT_RX_BITS            (1<<1),(1<<2),(1<<3),(1<<4)
+#define PCINT_PIN_COUNT            4
+#define PCINT_RX_BITS              (1<<1),(1<<2),(1<<3),(1<<4)
 #else
-#define PCINT_PIN_COUNT          5 // one more bit (PB0) is added in RX code
-#define PCINT_RX_BITS            (1<<1),(1<<2),(1<<3),(1<<4),(1<<0)
+#define PCINT_PIN_COUNT            5 // one more bit (PB0) is added in RX code
+#define PCINT_RX_BITS              (1<<1),(1<<2),(1<<3),(1<<4),(1<<0)
 #endif
-#define PCINT_RX_PORT                PORTB
-#define PCINT_RX_MASK                PCMSK0
-#define PCIR_PORT_BIT                (1<<0)
-#define RX_PC_INTERRUPT              PCINT0_vect
-#define RX_PCINT_PIN_PORT            PINB
+
+#define PCINT_RX_PORT               PORTB
+#define PCINT_RX_MASK               PCMSK0
+#define PCIR_PORT_BIT               (1<<0)
+#define RX_PC_INTERRUPT             PCINT0_vect
+#define RX_PCINT_PIN_PORT           PINB
 
 // Board Orientations and Sensor definitions
 
@@ -147,11 +148,6 @@
 
 #undef INTERNAL_I2C_PULLUPS
 
-#define LED_BLUE_PINMODE             DDRD |= (1<<4)           //D4 to output
-#define LED_BLUE_TOGGLE              PIND |= (1<<5)|(1<<4)     //switch LEDPIN state (Port D5) & pin D4
-#define LED_BLUE_OFF                 PORTD |= (1<<5); PORTD &= ~(1<<4)
-#define LED_BLUE_ON                  PORTD &= ~(1<<5); PORTD |= (1<<4)
-
 #define VBAT_PIN A3
 #define VOLTS_RTOP 58  // 56 Ratios as per HK NanoWii manual for 3S pack
 #define VOLTS_RBOT 33  
@@ -166,19 +162,14 @@
 #define I2CMAG 0
 
 #define MPU6050
-#define HMC5883L
-#define MS5611
+//#define HMC5883L
+//#define MS5611
 
 #define ACC_ORIENTATION(X, Y, Z)  {accADC[ROLL]  = -X; accADC[PITCH]  = -Y; accADC[YAW]  =  Z;}
 #define GYRO_ORIENTATION(X, Y, Z) {gyroADC[ROLL] =  Y; gyroADC[PITCH] = -X; gyroADC[YAW] = -Z;}
 #define MAG_ORIENTATION(X, Y, Z)  {magADC[ROLL]  =  X; magADC[PITCH]  =  Y; magADC[YAW]  = -Z;}
 
 #undef INTERNAL_I2C_PULLUPS
-
-#define LED_BLUE_PINMODE             DDRD |= (1<<4)           //D4 to output
-#define LED_BLUE_TOGGLE              PIND |= (1<<5)|(1<<4)     //switch LEDPIN state (Port D5) & pin D4
-#define LED_BLUE_OFF                 PORTD |= (1<<5); PORTD &= ~(1<<4)
-#define LED_BLUE_ON                  PORTD &= ~(1<<5); PORTD |= (1<<4)
 
 #define VBAT_PIN A4
 #define VOLTS_RTOP 58  // 56 Ratios as per HK NanoWii manual for 3S pack
@@ -201,13 +192,12 @@
 
 #define DC_MOTORS
 
-#define QUADX
-#define PWM_OUTPUTS  4
-
 #define MPU6050
+
 #define ACC_ORIENTATION(X, Y, Z)  {accADC[ROLL]  = -X; accADC[PITCH]  =  -Y; accADC[YAW]  =  Z;}
 #define GYRO_ORIENTATION(X, Y, Z) {gyroADC[ROLL] = Y; gyroADC[PITCH] = -X; gyroADC[YAW] = -Z;}
 #define MAG_ORIENTATION(X, Y, Z)  {magADC[ROLL]  =  X; magADC[PITCH]  =  Y; magADC[YAW]  = -Z;}
+
 #undef INTERNAL_I2C_PULLUPS
 
 #define VBAT_PIN A8
@@ -281,7 +271,7 @@ enum WingControl {
 #define ALT_HOLD_THROTTLE_NEUTRAL_ZONE 40
 #endif
 
-#if defined(BMP085) || defined(MS5611) || defined(MAXBOTIX) || defined(USE_GPS)
+#if defined(BMP085) || defined(MS5611) || defined(MAXBOTIX)
 #define USE_ALT
 #endif
 
@@ -519,20 +509,3 @@ const uint8_t boxids[] PROGMEM = {
 //#if (!defined(__AVR_ATmega32U4__) || ((PWM_OUTPUTS !=4) || defined(SERVO)))
 //#error "Implementation restriction: must be exactly 4 DC_MOTORS and no SERVOS and use Atmel 32u4 (Leonardo)"
 //#endif
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-

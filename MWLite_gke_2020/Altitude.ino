@@ -7,7 +7,7 @@ void doAltitudeControl(void) {
   int16_t throttleDiff;
 
   if (!f.BYPASS_MODE) {
-    if (f.ARMED && f.ALT_HOLD_MODE && (f.BARO_ACTIVE || f.SONAR_ACTIVE || (f.GPS_FIX_HOME && f.GPS_ACTIVE))) {      
+    if (f.ARMED && f.ALT_HOLD_MODE && (f.BARO_ACTIVE || f.SONAR_ACTIVE)) {      
       if (abs(rcCommand[THROTTLE] - hoverThrottle) > ALT_HOLD_THROTTLE_NEUTRAL_ZONE) {
         throttleDiff = rcCommand[THROTTLE] - hoverThrottle;
 #ifdef USE_PROP_ALT_HOLD
@@ -18,7 +18,7 @@ void doAltitudeControl(void) {
         desiredAltitude = constrain(desiredAltitude, 100, ALT_HOLD_LIMIT_M * 100);
         AltitudeIntE = 0;
       } 
-      rcCommand[THROTTLE] = hoverThrottle + altPID; // throttle is overriden by altitude hold
+      rcCommand[THROTTLE] = hoverThrottle + altPID; // throttle is overiden by altitude hold
     }
   }
 #endif

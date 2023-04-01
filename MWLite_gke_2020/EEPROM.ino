@@ -74,25 +74,32 @@ void LoadDefaults(void) {
   for(i = 0; i < CHECKBOX_ITEMS; i++)
     conf.activate[i] = 0;
 
-#if defined(MULTICOPTER)  
-  f.ANGLE_MODE = true; 
-  conf.activate[BOX_ANGLE] = 3; // Aux1
-#else
-  f.ANGLE_MODE = true; 
-  conf.activate[BOX_ANGLE] = 7; // Aux1 all positions
+//A1=SG, A2=SC, A3=S1, A4=SF, A5=S2
+
+#if !defined(MULTICOPTER) 
   f.BYPASS_MODE = true;
-  conf.activate[BOX_BYPASS] = 4<<9; // Aux4
+  conf.activate[BOX_BYPASS] = (4+0+0)<<9; // Aux4
+#endif
+
+  f.ANGLE_MODE = true; 
+  conf.activate[BOX_ANGLE] = (4+2+0)<<3; // Aux2 all positions
+
 #if defined(USE_ALT)
   f.ALT_HOLD_MODE = false;
-  conf.activate[BOX_ALT_HOLD] = 6<<6; // Aux3   
+  conf.activate[BOX_ALT_HOLD] = (4+2+0)<<6; // Aux3   
 #endif
+
 #if defined(USE_GPS)
   f.GPS_HOLD_MODE = false;
-  conf.activate[BOX_GPS_HOLD] = 2; // Aux1 
+  conf.activate[BOX_GPS_HOLD] = (0+2+0)<<0; // Aux1 
   f.GPS_HOME_MODE = false;
-  conf.activate[BOX_GPS_HOME] = 4; // Aux1 
+  conf.activate[BOX_GPS_HOME] = (4+0+0)<<0; // Aux1 
+#else
+#if defined(MULTICOPTER)
+  f.HEAD_FREE_MODE = false;
+  conf.activate[BOX_HEAD_FREE] = (4+2+0)<<0; // Aux1
 #endif 
-#endif
+#endif 
 
   conf.cycletimeuS = CYCLE_US;
   conf.min_throttleuS = MIN_EFF_THR_US;

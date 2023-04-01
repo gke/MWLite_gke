@@ -91,7 +91,7 @@ void configureReceiver(void) {
 #endif
 
 #if defined (SPEKTRUM)
-  serialOpen(SPEK_SERIAL_PORT,115200);
+  Serial.begin(SPEK_SERIAL_PORT,115200);
 #elif defined(SBUS)
   serialOpen(1,100000);
 #endif
@@ -375,7 +375,7 @@ void readSpektrum(void) {
 
 #if (SPEKTRUM == 1024)
 #define SPEK_BIND_PULSES 2
-#elif
+#else
 #define SPEK_BIND_PULSES 4
 #endif
 
@@ -452,10 +452,10 @@ void getRCInput(void) {
 
 } // getRCInput
 
-bool inline newRCValues(void) {
+boolean inline newRCValues(void) {
   static uint32_t rcLastUpdateuS = 0;
   static uint32_t rcIntervaluS = 0;
-  bool r;
+  boolean r;
 
 #if defined(SPEKTRUM)
   readSpektrum();   
@@ -469,7 +469,6 @@ bool inline newRCValues(void) {
 #if defined(DEBUG_RC)
     debug[1] = rcIntervaluS / 1000;
 #endif
-
     rcLastUpdateuS = micros();
     rcNewValues = inFailsafe = false;
     r = true;
@@ -631,84 +630,3 @@ bool inline newRCValues(void) {
  * Aux7      11
  
  */
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-

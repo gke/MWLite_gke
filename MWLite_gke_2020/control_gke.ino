@@ -132,8 +132,7 @@ void computeControl(void) {
     RateI = RateIntE[YAW] >> 13;
   }
 
-  axisPID[YAW] = Limit1(RateP + RateI, 500);
-  //axisPID[YAW] = Limit1(axisPID[YAW], abs(rcCommand[YAW]) + 100); // prevent "yaw jump" - slew limit?
+  axisPID[YAW] = Limit1(RateP + RateI, abs(rcCommand[YAW]) + 100); // prevent "yaw jump" - slew limit?
 
 } // computeControl
 

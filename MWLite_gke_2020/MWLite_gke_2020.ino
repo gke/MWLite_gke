@@ -2,7 +2,7 @@
 /*
 
  MWLite_gke
- May 2013
+ 2020
  
  MWLite_gke is free software: you can redistribute it and/or modify
  it under the terms of the GNU General Public License as published by
@@ -36,6 +36,10 @@
 
 #include "config.h"
 #include "def.h"
+
+boolean inline newRCValues(void);
+static void inline rxAppendToBuff(uint8_t ch, uint8_t port);
+extern volatile uint16_t rcValue[];
 
 static boolean  rcOptions[CHECKBOX_ITEMS];
 
@@ -133,7 +137,7 @@ static int16_t navCorr[3];
 
 // Baro
 
-boolean calibratingB = true;
+int16_t calibratingB = 0;
 static int32_t  baroAltitude;  // in cm
 static int16_t  ROC; // variometer in cm/s
 static int32_t densityAltitude = 0; // cm
@@ -248,7 +252,7 @@ void annexCode() {
 
 void setup() { 
 
-  serialOpen(0, SERIAL0_COM_SPEED);
+  Serial.begin(0, SERIAL0_COM_SPEED);
 
   LED_BLUE_PINMODE;
   initOutput();
@@ -292,6 +296,7 @@ void setup() {
 
 
 void loop (void) {
+  uint8_t i;
 
   cycleTimeuS = micros() - previousCycleuS;
 
@@ -316,6 +321,11 @@ void loop (void) {
 
   if (newRCValues()){ 
     getRCInput(); 
+    for (i = 0; i< RC_CHANS;i++) { 
+      Serial.print(rcValue[i]);
+      Serial.write(' ');
+    }
+    Serial.println();
     doConfigUpdate();    
     doRCRates(); 
     doMagHold();
@@ -326,42 +336,3 @@ void loop (void) {
   annexCode();
 
 } // loop
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
