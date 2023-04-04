@@ -91,7 +91,7 @@ void configureReceiver(void) {
 #endif
 
 #if defined (SPEKTRUM)
-  Serial.begin(SPEK_SERIAL_PORT,115200);
+  serialOpen(SPEK_SERIAL_PORT,115200);
 #elif defined(SBUS)
   serialOpen(1,100000);
 #endif
@@ -318,7 +318,7 @@ void readSpektrum(void) {
     }
     return;
   } //End of: Is it the GUI?
-
+      
   while (serialAvailable(SPEK_SERIAL_PORT) > SPEK_FRAME_SIZE)
     for (i = 0; i < SPEK_FRAME_SIZE; i++) 
       serialRead(SPEK_SERIAL_PORT); //discard stale frame and use latest
@@ -333,9 +333,7 @@ void readSpektrum(void) {
         spekChannel = 0x0F & (bh >> SPEK_CHAN_SHIFT);
         if (spekChannel < RC_CHANS) {
           Temp =  ((((uint16_t)(bh & SPEK_CHAN_MASK) << 8) + bl) SPEK_DATA_SHIFT);
-#if defined(USE_GKE_DM9_SPEKTRUM_SCALING) 
-          rcValue[spekChannel] = (Temp * 1.18) + 913; // direct measurement
-#elif defined (SPEKTRUM_RTF_SCALING)
+#if defined (SPEKTRUM_RTF_SCALING)
           Temp = Temp + 988 - MIDRC;
           if ((rcChannel[spekChannel] == YAW) || (rcChannel[spekChannel] == ROLL))
             Temp = -Temp;

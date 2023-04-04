@@ -30,7 +30,8 @@ void doRCRates(void) {
   int16_t Temp;
 
   for (chan = 0; chan < RC_CHANS; chan++)
-    rcCommand[chan] = Limit1(rcData[chan] - MID_RC_US, 500); // simpler to inc throttle
+    if (chan != THROTTLE)
+      rcCommand[chan] = Limit1(rcData[chan] - MID_RC_US, 500); // simpler to inc throttle
 
   for (chan = ROLL; chan <= YAW; chan++)
     rcCommand[chan] = Threshold(rcCommand[chan], STICK_DEADBAND_US);
@@ -137,18 +138,3 @@ void computeControl(void) {
 } // computeControl
 
 #endif
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-

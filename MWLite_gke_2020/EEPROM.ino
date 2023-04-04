@@ -116,23 +116,3 @@ void LoadDefaults(void) {
   calibratingG = 512;
 
 } // loadDefaults
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-

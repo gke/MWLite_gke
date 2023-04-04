@@ -26,15 +26,17 @@
 //#define MPU6050_DLPF_CFG MPU6050_LPF_98HZ
 //#define MPU6050_DLPF_CFG MPU6050_LPF_188HZ
 
-#define SPEKTRUM 1024
-//#define SPEKTRUM 2048
+//#define SPEKTRUM 1024
+#define SPEKTRUM 2048
 //#define SERIAL_SUM_PPM  PITCH,YAW,THROTTLE,ROLL,AUX1,AUX2,AUX3,AUX4,8,9,10,11 //For Graupner/Spektrum
 //#define SPEKTRUM_RTF_SCALING // rescales and reverses yaw and roll for Blade RTF MLP4DSM game style Tx
-#define USE_GKE_DM9_SPEKTRUM_SCALING // dodgy DM9 does not appear to capture pulse widths correctly?
 
 #define MOTOR_STOP // comment out for slow motor run after arming
 #define MIN_THR_US 1050
 #define MAX_THR_US 1850
+
+#define QUADX
+#define PWM_OUTPUTS   4
 
 //#define LVC_LIMIT 30 // x0.1V on PUMQ connect D8/AUX1 pin directly to battery raw
 
@@ -95,6 +97,11 @@
 //#define HMC5883L
 
 #define SPEKTRUM 1024
+//#define SPEKTRUM 2048
+
+#define MOTOR_STOP // comment out for slow motor run after arming
+#define MIN_THR_US 1050
+#define MAX_THR_US 1850
 
 #define LVC_LIMIT 30 // x0.1V on PUMQ connect D8/AUX1 pin directly to battery raw
 
@@ -271,7 +278,7 @@
 
 #define MAG_DECLINATION 12
 
-#define USE_GKE_DM9_SPEKTRUM_SCALING // dodgy DM9 does not appear to capture pulse widths correctly?
+// RUBBISH #define USE_GKE_DM9_SPEKTRUM_SCALING // dodgy DM9 does not appear to capture pulse widths correctly?
 //#define SPEKTRUM_RTF_SCALING // rescales and reverses yaw and roll for Blade RTF MLP4DSM game style Tx
 
 //#define DEBUG_RC // debug1 = glitch count, debug2 = frame width, debug3 = failsafe
@@ -384,7 +391,3 @@
 #else
 #define FAILSAFE_THR_US MIN_RC_US
 #endif
-
-
-
-
