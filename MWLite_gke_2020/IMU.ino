@@ -149,7 +149,7 @@ void getEstimatedAttitude(void){
     rotateV(&EstM.V,deltaGyroAngle);
 
     for (axis = ROLL; axis <= YAW; axis++) 
-      EstM32.A[axis] = EstM.A[axis] = EstM.A[axis] * ONE_MINUS_MAG_CONF)  + (float)magADC[axis] * MAG_CONF;
+      EstM32.A[axis] = EstM.A[axis] = EstM.A[axis] * ONE_MINUS_MAG_CONF  + (float)magADC[axis] * MAG_CONF;
 
     angle[YAW] = atan2(
     EstM32.V.Z * EstG32.V.X - EstM32.V.X * EstG32.V.Z,
@@ -202,56 +202,3 @@ void calculateVerticalAcceleration(void) {
     accZ = 0;
 
 } // calculateVerticalAcceleration
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-

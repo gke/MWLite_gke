@@ -2,7 +2,7 @@
 /*
 
   MWLite_gke
-  2020
+  April 2023
 
   MWLite_gke is free software: you can redistribute it and/or modify
   it under the terms of the GNU General Public License as published by
@@ -325,18 +325,6 @@ void loop (void) {
 
   if (newRCValues()) {
     getRCInput();
-    for (i = 0; i < 8 ; i++) { //RC_CHANS
-      Serial.print(rcValue[i]);
-      Serial.write(' ');
-    }
-    for (i = 0; i < 3; i++) {
-      Serial.print(gyroData[i]);
-      Serial.write(9);
-      Serial.print(accData[i]);
-      Serial.write(9);
-    }
-    if (f.ARMED) Serial.write("Armed"); else Serial.write("Disarmed");
-    Serial.println();
     
     doConfigUpdate();
     doRCRates();
